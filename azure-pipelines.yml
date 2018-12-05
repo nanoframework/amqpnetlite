@@ -50,14 +50,13 @@ steps:
 - task: NuGetCommand@2
   inputs:
     command: 'custom' 
-    arguments: 'pack nuspec\AMQPNetLite.nanoFramework.nuspec -Version 2.1.5 '
-  condition: succeeded()
+    arguments: 'pack nuspec\AMQPNetLite.nanoFramework.nuspec -Version 2.1.5 -BasePath .\'
   displayName: Pack NuGet for AMQPNetLite
 
 - task: NuGetCommand@2
   inputs:
     command: 'custom' 
-    arguments: 'pack nuspec\AMQPNetMicro.nanoFramework.nuspec -Version 2.1.5 '
+    arguments: 'pack nuspec\AMQPNetMicro.nanoFramework.nuspec -Version 2.1.5 -BasePath .\'
   condition: succeeded()
   displayName: Pack NuGet for AMQPNetMicro
 
@@ -65,7 +64,7 @@ steps:
   inputs:
     sourceFolder: $(Build.SourcesDirectory)
     Contents: |
-      **\$(nugetPackageName)*.nupkg
+      **\AMQP*.nupkg
     TargetFolder: '$(Build.ArtifactStagingDirectory)'
     flattenFolders: true
   condition: succeeded()
@@ -89,3 +88,11 @@ steps:
     publishFeedCredentials: 'MyGet'
   condition: succeeded()
   displayName: Push NuGet packages to MyGet
+
+# step from template @ nf-tools repo
+# report error
+- template: azure-pipelines-templates/discord-webhook-task.yml@templates  
+  parameters:
+    status: 'failure'
+    webhookUrl: '$(DiscordWebhook)'
+    message: ''
