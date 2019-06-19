@@ -57,13 +57,13 @@ steps:
           $version = [int]$counter
 
           # preview version          
-          # $nugetVersion = "2.1.8-preview-"
+          # $nugetVersion = "2.1.8-preview."
           
           # stable version
           $nugetVersion = "2.1.7."
           
           
-          $nugetVersion = $nugetVersion + $version.ToString("0000")
+          $nugetVersion = $nugetVersion + $version.ToString()
 
           Write-Host "$("##vso[task.setvariable variable=NUGET_VERSION]")$nugetVersion"
       errorActionPreference: 'stop'
