@@ -60,7 +60,7 @@ steps:
           # $nugetVersion = "2.1.8-preview."
           
           # stable version
-          $nugetVersion = "2.1.7."
+          $nugetVersion = "2.1.8."
           
           
           $nugetVersion = $nugetVersion + $version.ToString()
