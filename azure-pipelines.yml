@@ -110,7 +110,19 @@ steps:
     packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
     publishFeedCredentials: 'MyGet'
   condition: succeeded()
+  continueOnError: true
   displayName: Push NuGet packages to MyGet
+
+# push NuGet packages to MyGet feed (always happens except on PR builds)
+- task: NuGetCommand@2
+  inputs:
+    command: push
+    nuGetFeedType: external
+    packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
+    publishFeedCredentials: 'NuGet'
+  condition: succeeded()
+  continueOnError: true
+  displayName: Push NuGet packages to NuGet
 
 # step from template @ nf-tools repo
 # report error
