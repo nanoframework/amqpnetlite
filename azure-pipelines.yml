@@ -139,7 +139,7 @@ steps:
     nuGetFeedType: external
     packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
     publishFeedCredentials: 'AzureArtifacts'
-  condition: succeeded()
+  condition: and( succeeded(), ne(variables['system.pullrequest.isfork'], true) )
   continueOnError: true
   displayName: Push NuGet packages to Azure Artifacts
 
@@ -150,7 +150,7 @@ steps:
     nuGetFeedType: external
     packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
     publishFeedCredentials: 'NuGet'
-  condition: succeeded()
+  condition: and( succeeded(), ne(variables['system.pullrequest.isfork'], true) )
   continueOnError: true
   displayName: Push NuGet packages to NuGet
 
