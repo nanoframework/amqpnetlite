@@ -70,6 +70,30 @@ steps:
       failOnStderr: 'true'
   displayName: Tweak NuGet package version
 
+- powershell: |
+    # get subject and commit message for commit
+    $commitMessage = git log --format='%B' -1
+
+    # need to flatten message by removing new lines
+    $commitMessage = $commitMessage -replace "`r`n", " "
+
+    if($commitMessage -like "*PUBLISH_RELEASE*")
+    {
+      # set variable
+      Write-Host "$("##vso[task.setvariable variable=RELEASE_DRAFT;isOutput=true]")False"
+      Write-Host "$("##vso[task.setvariable variable=RELEASE_VERSION;isOutput=true]")True"
+      Write-Host "Release draft: FALSE"
+    }
+    else
+    {
+      # set variable
+      Write-Host "$("##vso[task.setvariable variable=RELEASE_DRAFT;isOutput=true]")True"
+      Write-Host "$("##vso[task.setvariable variable=RELEASE_VERSION;isOutput=true]")False"
+      Write-Host "Release draft: TRUE"
+    }
+  name: SetReleaseDraftVar
+  displayName: Set release draft var
+
 - task: NuGetCommand@2
   inputs:
     command: 'custom' 
@@ -102,16 +126,16 @@ steps:
   condition: and( succeeded(), ne(variables['system.pullrequest.isfork'], true) )
   displayName: Publish deployables artifacts
 
-# push NuGet packages to MyGet feed (always happens except on PR builds)
+# push NuGet packages to Azure Pipelines feed (always happens except on PR builds)
 - task: NuGetCommand@2
   inputs:
     command: push
     nuGetFeedType: external
     packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
-    publishFeedCredentials: 'MyGet'
+    publishFeedCredentials: 'AzurePipelines'
   condition: succeeded()
   continueOnError: true
-  displayName: Push NuGet packages to MyGet
+  displayName: Push NuGet packages to Azure Pipelines
 
 # push NuGet packages to MyGet feed (always happens except on PR builds)
 - task: NuGetCommand@2
