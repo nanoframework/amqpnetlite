@@ -11,6 +11,12 @@ trigger:
   #   include:
   #   - v/*
 
+pr:
+  branches:
+    include:
+    - cd-nanoframework
+  autoCancel: true
+
 # add nf-tools repo to resources (for Azure Pipelines templates)
 resources:
   repositories:
