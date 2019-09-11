@@ -40,10 +40,15 @@ steps:
 - checkout: self
 
 - task: NuGetToolInstaller@0
+  inputs:
+    versionSpec: '4.9.3'
+  displayName: Install specifc version of NuGet
 
 - task: NuGetCommand@2
   inputs:
     restoreSolution: '$(solution)'
+    feedsToUse: config
+    nugetConfigPath: source/NuGet.config
   displayName: NuGet restore
 
 - task: InstallnFBuildComponents@1
