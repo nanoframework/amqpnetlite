@@ -26,13 +26,9 @@
     <ProjectReference Include="..\..\..\nanoFramework\Amqp.nanoFramework.nfproj" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="mscorlib">
-      <HintPath>..\..\..\packages\nanoFramework.CoreLibrary.1.6.0-preview.1\lib\mscorlib.dll</HintPath>
-    </Reference>
-    <Reference Include="mscorlib, Version=1.5.1.0, Culture=neutral, PublicKeyToken=c07d481e9758c731">
-      <HintPath>..\..\..\packages\nanoFramework.CoreLibrary.1.5.1-preview.1\lib\mscorlib.dll</HintPath>
+    <Reference Include="mscorlib, Version=1.6.0.0, Culture=neutral, PublicKeyToken=c07d481e9758c731">
+      <HintPath>..\packages\nanoFramework.CoreLibrary.1.6.0-preview.1\lib\mscorlib.dll</HintPath>
       <Private>True</Private>
-      <SpecificVersion>True</SpecificVersion>
     </Reference>
     <Reference Include="nanoFramework.Runtime.Events, Version=1.4.1.0, Culture=neutral, PublicKeyToken=c07d481e9758c731">
       <HintPath>..\..\..\packages\nanoFramework.Runtime.Events.1.4.1-preview.5\lib\nanoFramework.Runtime.Events.dll</HintPath>
@@ -61,7 +57,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="app.config" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(NanoFrameworkProjectSystemPath)NFProjectSystem.CSharp.targets" Condition="Exists('$(NanoFrameworkProjectSystemPath)NFProjectSystem.CSharp.targets')" />
