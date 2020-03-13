@@ -143,7 +143,7 @@ steps:
     command: push
     nuGetFeedType: external
     packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
-    publishFeedCredentials: 'AzureArtifacts'
+    publishFeedCredentials: 'AzureArtifacts-amqplite'
   condition: and( succeeded(), ne(variables['system.pullrequest.isfork'], true) )
   continueOnError: true
   displayName: Push NuGet packages to Azure Artifacts
@@ -154,7 +154,7 @@ steps:
     command: push
     nuGetFeedType: external
     packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
-    publishFeedCredentials: 'NuGet'
+    publishFeedCredentials: 'NuGet-amqplite'
   condition: and( succeeded(), ne(variables['system.pullrequest.isfork'], true) )
   continueOnError: true
   displayName: Push NuGet packages to NuGet
