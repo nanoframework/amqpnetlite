@@ -98,7 +98,7 @@ namespace Amqp
 #if (MF_FRAMEWORK_VERSION_V4_2 || MF_FRAMEWORK_VERSION_V4_3 || MF_FRAMEWORK_VERSION_V4_4)
             Microsoft.SPOT.Debug.Print(sb.ToString());
 #elif (NANOFRAMEWORK_1_0)
-            Console.WriteLine(sb.ToString());
+            Debug.WriteLine(sb.ToString());
 #endif
 
 #endif
