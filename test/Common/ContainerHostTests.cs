@@ -142,6 +142,7 @@ namespace Test.Amqp
             var connection = new Connection(Address);
             var session = new Session(connection);
             var receiver = new ReceiverLink(session, "receiver0", name);
+            receiver.SetCredit(count, CreditMode.Manual);
             int released = 0;
             int rejected = 0;
             int ignored = 0;
@@ -869,6 +870,7 @@ namespace Test.Amqp
             var listenerConnection = (ListenerConnection)link.Session.Connection;
             Assert.IsTrue(listenerConnection.Principal != null, "principal is null");
             Assert.IsTrue(listenerConnection.Principal.Identity.AuthenticationType == "PLAIN", "wrong auth type");
+            Assert.AreEqual(Address.User, listenerConnection.Principal.Identity.Name);
         }
 
         [TestMethod]
