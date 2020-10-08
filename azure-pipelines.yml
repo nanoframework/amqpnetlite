@@ -98,17 +98,18 @@ steps:
   displayName: Set release draft var
 
 - task: NuGetCommand@2
+  displayName: Pack NuGet for AMQPNetLite
+  condition: succeeded()
   inputs:
     command: 'custom' 
-    arguments: 'pack nuspec\AMQPNetLite.nanoFramework.nuspec -Version $(NUGET_VERSION) -BasePath .\'
-  displayName: Pack NuGet for AMQPNetLite
+    arguments: 'pack nuspec\AMQPNetLite.nanoFramework.nuspec -Version $(NUGET_VERSION) -BasePath $(Build.SourcesDirectory)'
 
 - task: NuGetCommand@2
+  displayName: Pack NuGet for AMQPNetMicro
+  condition: succeeded()
   inputs:
     command: 'custom' 
-    arguments: 'pack nuspec\AMQPNetMicro.nanoFramework.nuspec -Version $(NUGET_VERSION) -BasePath .\'
-  condition: succeeded()
-  displayName: Pack NuGet for AMQPNetMicro
+    arguments: 'pack nuspec\AMQPNetMicro.nanoFramework.nuspec -Version $(NUGET_VERSION) -BasePath $(Build.SourcesDirectory)'
 
 - task: CopyFiles@1
   inputs:
