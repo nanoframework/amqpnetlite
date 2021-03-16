@@ -11,10 +11,10 @@ resources:
       type: github
       endpoint: nanoframework
       name: nanoframework/amqpnetlite
-      ref: master
+      ref: nanoframework-dev
 
 pool:
-  vmImage: 'VS2017-Win2016'
+  vmImage: 'windows-2019'
 
 variables:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
@@ -23,7 +23,7 @@ variables:
   buildConfiguration: 'Release'
   NF_Library: 'amqpnetlite'
   # creates a counter called versioncounter and assigns it to the minor variable
-  REVISION: $[counter('versioncounter', 200)]
+  REVISION: $[counter('versioncounter', 1)]
 
 steps:
 
@@ -72,7 +72,7 @@ steps:
           $version = [int]$counter
 
           # preview version          
-          $nugetVersion = "2.4.2-preview."
+          $nugetVersion = "2.4.3-preview."
           
           # stable version
           # $nugetVersion = "2.4.2."
