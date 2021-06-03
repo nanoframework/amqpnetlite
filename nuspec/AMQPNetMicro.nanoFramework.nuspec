@@ -14,10 +14,10 @@
     <copyright>Copyright 2014</copyright>
     <tags>AMQP netmf nf nanoframework</tags>
     <dependencies>
-      <dependency id="nanoFramework.CoreLibrary" version="1.10.5-preview.4" />
-      <dependency id="nanoFramework.Runtime.Events" version="1.9.0-preview.28" />
-      <dependency id="nanoFramework.System.Collections" version="1.2.0-preview.62" />
-      <dependency id="nanoFramework.System.Math" version="1.4.1-preview.1" />
+      <dependency id="nanoFramework.CoreLibrary" version="1.10.5-preview.10" />
+      <dependency id="nanoFramework.Runtime.Events" version="1.9.1-preview.1" />
+      <dependency id="nanoFramework.System.Collections" version="1.2.0-preview.65" />
+      <dependency id="nanoFramework.System.Math" version="1.4.1-preview.3" />
       <dependency id="nanoFramework.System.Net" version="1.6.5-preview.31" />
       <dependency id="nanoFramework.System.Text" version="1.1.1-preview.57" />
     </dependencies>
