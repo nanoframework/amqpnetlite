@@ -239,6 +239,29 @@ namespace Test.Amqp
         }
 
         [TestMethod]
+        public void ConnectionHeartBeatCloseTimeoutTest()
+        {
+            this.testListener.RegisterTarget(TestPoint.Close, (stream, channel, fields) =>
+            {
+                return TestOutcome.Stop;
+            });
+
+            string testName = "ConnectionHeartBeatCloseTimeoutTest";
+
+            typeof(Connection).GetField("HeartBeatCloseTimeout", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, 100);
+            bool closeCalled = false;
+
+            Open open = new Open() { ContainerId = testName, IdleTimeOut = 1000, HostName = this.address.Host };
+            Connection connection = new Connection(this.address, null, open, null);
+            connection.AddClosedCallback((s, e) => closeCalled = true);
+            Session session = new Session(connection);
+            SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
+            sender.Send(new Message("test") { Properties = new Properties() { MessageId = testName } });
+            Thread.Sleep(2200);
+            Assert.IsTrue(closeCalled);
+        }
+
+        [TestMethod]
         public void SaslMismatchTest()
         {
             this.testListener.RegisterTarget(TestPoint.Header, (stream, channel, fields) =>
@@ -1674,6 +1697,33 @@ namespace Test.Amqp
         }
 
         [TestMethod]
+        public void HandlerSslAuthenticateTest()
+        {
+            Event evt = default(Event);
+
+            var handler = new TestHandler(e =>
+            {
+                if (e.Id == EventId.SslAuthenticate)
+                {
+                    evt = e;
+                }
+            });
+
+            var sslAddress = new Address("amqps://127.0.0.1:" + port);
+            try
+            {
+                Connection connection = new Connection(sslAddress, handler);
+            }
+            catch
+            {
+                // OK to fail as the listener doesnt support SSL
+                // but the event should fire.
+            }
+
+            Assert.AreEqual(EventId.SslAuthenticate, evt.Id);
+        }
+
+        [TestMethod]
         public void HandlerTest()
         {
             string testName = "HandlerTest";
@@ -1685,7 +1735,8 @@ namespace Test.Amqp
 
             Action<Dictionary<EventId, int>> validator = dict =>
             {
-                Assert.AreEqual(10, dict.Count);
+                Assert.AreEqual(11, dict.Count);
+                Assert.AreEqual(1, dict[EventId.SocketConnect]);
                 Assert.AreEqual(1, dict[EventId.ConnectionLocalOpen]);
                 Assert.AreEqual(1, dict[EventId.ConnectionRemoteOpen]);
                 Assert.AreEqual(1, dict[EventId.SessionLocalOpen]);
