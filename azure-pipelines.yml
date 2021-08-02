@@ -23,7 +23,7 @@ variables:
   buildConfiguration: 'Release'
   NF_Library: 'amqpnetlite'
   # creates a counter called versioncounter and assigns it to the minor variable
-  REVISION: $[counter('versioncounter', 1)]
+  REVISION: $[counter('versioncounter_2_4_4', 1)]
 
 steps:
 
@@ -69,10 +69,10 @@ steps:
           $version = [int]$counter
 
           # preview version          
-          # $nugetVersion = "2.4.3-preview."
+          $nugetVersion = "2.4.4-preview."
           
           # stable version
-          $nugetVersion = "2.4.3."
+          # $nugetVersion = "2.4.3."
           
           
           $nugetVersion = $nugetVersion + $version.ToString()
