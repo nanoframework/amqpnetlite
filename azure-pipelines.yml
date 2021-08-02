@@ -69,10 +69,10 @@ steps:
           $version = [int]$counter
 
           # preview version          
-          $nugetVersion = "2.4.3-preview."
+          # $nugetVersion = "2.4.3-preview."
           
           # stable version
-          # $nugetVersion = "2.4.2."
+          $nugetVersion = "2.4.3."
           
           
           $nugetVersion = $nugetVersion + $version.ToString()
