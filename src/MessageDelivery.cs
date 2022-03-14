@@ -17,64 +17,55 @@
 
 namespace Amqp
 {
+    using Amqp.Framing;
+
     /// <summary>
-    /// Contains the AMQP settings for a <see cref="Connection"/>.
+    /// Contains the state associated with a message delivery.
     /// </summary>
-    public class AmqpSettings
+    public struct MessageDelivery
     {
-        /// <summary>
-        /// Gets or sets the open.max-frame-size field.
-        /// </summary>
-        public int MaxFrameSize
+        readonly Delivery delivery;
+
+        internal MessageDelivery(Delivery delivery)
         {
-            get;
-            set;
+            this.delivery = delivery;
         }
 
         /// <summary>
-        /// Gets or sets the open.container-id field.
+        /// Returs an empty value for a message that is not delivered yet.
         /// </summary>
-        public string ContainerId
+        public static MessageDelivery None
         {
-            get;
-            set;
+            get { return default(MessageDelivery); }
         }
 
         /// <summary>
-        /// Gets or sets the open.hostname field.
+        /// Gets the delivery tag.
         /// </summary>
-        public string HostName
+        public byte[] Tag
         {
-            get;
-            set;
+            get { return this.delivery.Tag; }
         }
 
         /// <summary>
-        /// Gets or sets the open.channel-max field (less by one).
+        /// Gets the delivery state.
         /// </summary>
-        public ushort MaxSessionsPerConnection
+        public DeliveryState State
         {
-            get;
-            set;
+            get { return this.delivery.State; }
         }
 
         /// <summary>
-        /// Gets or sets the begin.handle-max field (less by one).
+        /// Gets the Link over which the message was transferred, or null if the message is not transferred yet.
         /// </summary>
-        public int MaxLinksPerSession
+        public Link Link
         {
-            get;
-            set;
+            get { return this.delivery.Link; }
         }
 
-        /// <summary>
-        /// Gets or sets the connection idle timeout. Half the value is set
-        /// as the value of open.idle-time-out field.
-        /// </summary>
-        public int IdleTimeout
+        internal Delivery Delivery
         {
-            get;
-            set;
+            get { return this.delivery; }
         }
-    }
+    };
 }

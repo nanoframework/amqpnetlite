@@ -110,15 +110,37 @@ namespace Amqp
         /// Creates a new connection with a custom open frame and a callback to handle remote open frame.
         /// </summary>
         /// <param name="address">The address of remote endpoint to connect to.</param>
-        /// <param name="open">If specified, it is sent to open the connection, otherwise an open frame created from the AMQP settings property is sent.</param>
+        /// <param name="open">If specified, it is sent to open the connection, otherwise an open frame created from the AMQP settings is sent.</param>
         /// <param name="onOpened">If specified, it is invoked when an open frame is received from the remote peer.</param>
         /// <returns>A task for the connection creation operation. On success, the result is an AMQP <see cref="Connection"/></returns>
+        /// <remarks>The Open object, when provided, is used as is, and not augmented by the AMQP settings.</remarks>
         public Task<Connection> CreateAsync(Address address, Open open = null, OnOpened onOpened = null)
         {
             return this.CreateAsync(address, open, onOpened, null);
         }
 
-        async Task<Connection> CreateAsync(Address address, Open open, OnOpened onOpened, IHandler handler)
+        internal async Task ConnectAsync(Address address, SaslProfile saslProfile, Open open, Connection connection)
+        {
+            if (saslProfile == null)
+            {
+                if (address.User != null)
+                {
+                    saslProfile = new SaslPlainProfile(address.User, address.Password);
+                }
+                else if (this.saslSettings != null && this.saslSettings.Profile != null)
+                {
+                    saslProfile = this.saslSettings.Profile;
+                }
+            }
+
+            IAsyncTransport transport = await this.CreateTransportAsync(address, saslProfile, connection.Handler).ConfigureAwait(false);
+            connection.Init(this.BufferManager, this.AMQP, transport, open);
+
+            AsyncPump pump = new AsyncPump(this.BufferManager, transport);
+            pump.Start(connection);
+        }
+
+        async Task<IAsyncTransport> CreateTransportAsync(Address address, SaslProfile saslProfile, IHandler handler)
         {
             IAsyncTransport transport;
             TransportProvider provider;
@@ -145,27 +167,38 @@ namespace Amqp
                 throw new NotSupportedException(address.Scheme);
             }
 
-            try
+            if (saslProfile != null)
+            {
+                try
+                {
+                    transport = await saslProfile.OpenAsync(address.Host, this.BufferManager, transport, null).ConfigureAwait(false);
+                }
+                catch
+                {
+                    transport.Close();
+                    throw;
+                }
+            }
 
+            return transport;
+        }
+
+        async Task<Connection> CreateAsync(Address address, Open open, OnOpened onOpened, IHandler handler)
+        {
+            SaslProfile saslProfile = null;
+            if (address.User != null)
             {
-                if (address.User != null)
-                {
-                    SaslPlainProfile profile = new SaslPlainProfile(address.User, address.Password);
-                    transport = await profile.OpenAsync(address.Host, this.BufferManager, transport, null).ConfigureAwait(false);
-                }
-                else if (this.saslSettings != null && this.saslSettings.Profile != null)
-                {
-                    transport = await this.saslSettings.Profile.OpenAsync(address.Host, this.BufferManager, transport, null).ConfigureAwait(false);
-                }
+                saslProfile = new SaslPlainProfile(address.User, address.Password);
             }
-            catch
+            else if (this.saslSettings != null && this.saslSettings.Profile != null)
             {
-                transport.Close();
-                throw;
+                saslProfile = this.saslSettings.Profile;
             }
+
+            IAsyncTransport transport = await this.CreateTransportAsync(address, saslProfile, handler).ConfigureAwait(false);
+            Connection connection = new Connection(this.BufferManager, this.AMQP, address, transport, open, onOpened, handler);
 
             AsyncPump pump = new AsyncPump(this.BufferManager, transport);
-            Connection connection = new Connection(this.BufferManager, this.AMQP, address, transport, open, onOpened, handler);
             pump.Start(connection);
 
             return connection;
