@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 180 
     runs-on: windows-latest
     env:
-      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ secrets.NFBOT_GITHUB_ACTIONS }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
