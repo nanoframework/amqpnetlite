@@ -28,10 +28,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          path: main        
+          path: main
+          ref: master
       - name: Update dependencies
         uses: nanoframework/nanodu@v1
         with:
           solutionsToCheck: 'amqp-nanoFramework.sln'
           workingDirectory: main
-          branchToPr: ${{ env.BRANCH_NAME }}
+          branchToPr: master
