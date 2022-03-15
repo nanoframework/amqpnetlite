@@ -1,3 +1,6 @@
+# Copyright (c) .NET Foundation and Contributors
+# See LICENSE file in the project root for full license information.
+
 # no trigger config here, this is handled at Azure Pipelines interface
 
 # add nf-tools repo to resources (for Azure Pipelines templates)
@@ -14,14 +17,13 @@ resources:
       ref: nanoframework-dev
 
 pool:
-  vmImage: 'windows-2019'
+  vmImage: 'windows-latest'
 
 variables:
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
   solution: './amqpnetlite/amqp-nanoFramework.sln'
   buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
-  NF_Library: 'amqpnetlite'
   # creates a counter called versioncounter and assigns it to the minor variable
   REVISION: $[counter('versioncounter_2_4_4', 1)]
 
@@ -107,7 +109,7 @@ steps:
 
 - task: DotNetCoreCLI@2
   displayName: Install SignTool tool
-  condition: and( succeeded(), eq(variables['System.PullRequest.PullRequestId'], '') )
+  condition: and(succeeded(), eq(variables['System.PullRequest.PullRequestId'], ''))
   inputs:
     command: custom
     custom: tool
@@ -126,12 +128,12 @@ steps:
     --descriptionUrl "https://github.com/$env:Build_Repository_Name"
   displayName: Sign packages
   continueOnError: true
-  condition: and( succeeded(), eq(variables['System.PullRequest.PullRequestId'], '') )
+  condition: and(succeeded(), eq(variables['System.PullRequest.PullRequestId'], ''))
 
 # publish artifacts (only possible if this is not a PR originated on a fork)
 - task: PublishBuildArtifacts@1
   displayName: Publish deployables artifacts
-  condition: and( succeeded(), ne(variables['system.pullrequest.isfork'], true) )
+  condition: succeeded()
   inputs:
     PathtoPublish: '$(Build.ArtifactStagingDirectory)'
     ArtifactName: deployables
@@ -140,7 +142,7 @@ steps:
 # push NuGet packages to Azure Artifacts feed (always happens except on PR builds)
 - task: NuGetCommand@2
   displayName: Push NuGet packages to Azure Artifacts
-  condition: and( succeeded(), ne(variables['system.pullrequest.isfork'], true) )
+  condition: and(succeeded(), eq(variables['System.PullRequest.PullRequestId'], ''))
   continueOnError: true
   inputs:
     command: push
@@ -149,10 +151,10 @@ steps:
     publishFeedCredentials: 'AzureArtifacts-amqplite'
     allowPackageConflicts: true
 
-# push NuGet packages to MyGet feed (always happens except on PR builds)
+# push NuGet packages to NuGet feed (always happens except on PR builds)
 - task: NuGetCommand@2
   displayName: Push NuGet packages to NuGet
-  condition: and( succeeded(), ne(variables['system.pullrequest.isfork'], true) )
+  condition: and(succeeded(), eq(variables['System.PullRequest.PullRequestId'], ''))
   continueOnError: true
   inputs:
     command: push
