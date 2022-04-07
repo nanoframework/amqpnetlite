@@ -63,6 +63,7 @@ steps:
     solution: '$(solution)'
     platform: '$(buildPlatform)'
     configuration: '$(buildConfiguration)'
+    msbuildArchitecture: 'x64'
 
 - task: PowerShell@2
   displayName: Tweak NuGet package version
@@ -73,7 +74,7 @@ steps:
           $version = [int]$counter
 
           # preview version          
-          $nugetVersion = "2.4.4-preview."
+          $nugetVersion = "2.4.4."
           
           # stable version
           # $nugetVersion = "2.4.3."
