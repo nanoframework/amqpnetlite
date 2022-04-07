@@ -80,6 +80,37 @@ namespace Amqp.Handler
         /// A <see cref="IDelivery"/> (<see cref="Event.Context"/>) is received.
         /// </summary>
         ReceiveDelivery,
+        /// <summary>
+        /// A System.Net.Sockets.Socket (<see cref="Event.Context"/>) is connected.
+        /// </summary>
+        SocketConnect,
+        /// <summary>
+        /// A System.Net.Security.SslStream (<see cref="Event.Context"/>) is created and about to be authenticated.
+        /// Handler MUST call System.Net.Security.SslStream.AuthenticateAsClient(string) or one of its overloads.
+        /// </summary>
+        SslAuthenticate,
+#if NETFX || NETFX40 || DOTNET
+        /// <summary>
+        /// A System.Net.Sockets.Socket (<see cref="Event.Context"/>) is accepted.
+        /// </summary>
+        SocketAccept,
+        /// <summary>
+        /// A System.Net.Security.SslStream (<see cref="Event.Context"/>) is accepted.
+        /// </summary>
+        SslStreamAccept,
+        /// <summary>
+        /// A System.Net.HttpListenerContext (<see cref="Event.Context"/>) is accepted in the WebSockets listener.
+        /// </summary>
+        HttpAccept,
+        /// <summary>
+        /// A System.Net.WebSockets.WebSocketContext (<see cref="Event.Context"/>) is accepted.
+        /// </summary>
+        WebSocketAccept,
+        /// <summary>
+        /// A <see cref="Amqp.Listener.ListenerConnection"/> is accepted.
+        /// </summary>
+        ConnectionAccept,
+#endif
     }
 
     /// <summary>

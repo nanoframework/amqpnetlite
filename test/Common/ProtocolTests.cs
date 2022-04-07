@@ -101,6 +101,101 @@ namespace Test.Amqp
         }
 
         [TestMethod]
+        public void ConnectionMaxFrameSizeNegativeTest()
+        {
+            Stream networkStream = null;
+            this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
+            {
+                networkStream = stream;
+                TestListener.FRM(stream, 0x13UL, 0, channel, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, false, false,
+                    new Fields() { { new Symbol("big-string"), new string('a', 1024) } });  // flow
+                return TestOutcome.Stop;
+            });
+
+            string testName = "ConnectionMaxFrameSizeNegativeTest";
+
+            Trace.WriteLine(TraceLevel.Information, "sync test");
+            {
+                Open open = new Open() { ContainerId = testName, HostName = "localhost", MaxFrameSize = 512 };
+                Connection connection = new Connection(this.address, null, open, null);
+                Session session = new Session(connection);
+                ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, "any");
+                try
+                {
+                    receiver.Receive();
+                }
+                catch (AmqpException) { }
+                Assert.IsTrue(connection.Error != null);
+                Assert.AreEqual((Symbol)ErrorCode.InvalidField, connection.Error.Condition);
+                Assert.AreEqual(ConnectionState.End, connection.ConnectionState);
+                try
+                {
+                    Thread.Sleep(300);
+                    networkStream.WriteByte(0);
+                    Assert.IsTrue(false, "transport connection not closed");
+                }
+                catch (IOException) { }
+                catch (ObjectDisposedException) { }
+            }
+
+            Trace.WriteLine(TraceLevel.Information, "async test");
+            networkStream = null;
+            Task.Factory.StartNew(async () =>
+            {
+                ConnectionFactory factory = new ConnectionFactory();
+                factory.AMQP.MaxFrameSize = 512;
+                IConnection connection = await factory.CreateAsync(this.address);
+                ISession session = connection.CreateSession();
+                IReceiverLink receiver = session.CreateReceiver("receiver-" + testName, "any");
+                try
+                {
+                    await receiver.ReceiveAsync();
+                }
+                catch (AmqpException) { }
+                Assert.IsTrue(connection.Error != null);
+                Assert.AreEqual((Symbol)ErrorCode.InvalidField, connection.Error.Condition);
+                try
+                {
+                    networkStream.WriteByte(0);
+                    Assert.IsTrue(false, "transport connection not closed");
+                }
+                catch (IOException) { }
+                catch (ObjectDisposedException) { }
+                await connection.CloseAsync();
+            }).Unwrap().GetAwaiter().GetResult();
+        }
+
+        [TestMethod]
+        public void ConnectionWithUserOpenTest()
+        {
+            string testName = "ConnectionWithUserOpenTest";
+            List receivedOpen = null;
+            this.testListener.RegisterTarget(TestPoint.Open, (stream, channel, fields) =>
+            {
+                receivedOpen = fields;
+                return TestOutcome.Continue;
+            });
+
+            Task.Factory.StartNew(async () =>
+            {
+                ConnectionFactory factory = new ConnectionFactory();
+                factory.AMQP.MaxFrameSize = 2048;
+                factory.AMQP.MaxSessionsPerConnection = 10;
+
+                Open open = new Open() { ContainerId = testName, HostName = "localhost", MaxFrameSize = 4096, ChannelMax = 128 };
+                Connection connection = await factory.CreateAsync(this.address, open, null);
+                Session session = new Session(connection);
+                SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
+                await sender.SendAsync(new Message("test") { Properties = new Properties() { MessageId = testName } });
+                await connection.CloseAsync();
+
+                Assert.IsTrue(receivedOpen != null);
+                Assert.AreEqual(open.MaxFrameSize, receivedOpen[2]);
+                Assert.AreEqual(open.ChannelMax, receivedOpen[3]);
+            }).Unwrap().GetAwaiter().GetResult();
+        }
+
+        [TestMethod]
         public void RemoteSessionChannelTest()
         {
             this.testListener.RegisterTarget(TestPoint.Begin, (stream, channel, fields) =>
@@ -209,14 +304,16 @@ namespace Test.Amqp
 
             Trace.WriteLine(TraceLevel.Information, "sync test");
             {
-                Open open = new Open() { ContainerId = testName, HostName = "localhost", IdleTimeOut = 1000 };
+                Open open = new Open() { ContainerId = testName, HostName = "localhost", IdleTimeOut = 500 };
                 Connection connection = new Connection(this.address, null, open, null);
                 Session session = new Session(connection);
                 SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
                 sender.Send(new Message("test") { Properties = new Properties() { MessageId = testName } });
-                Thread.Sleep(1200);
                 var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance);
                 Assert.IsTrue(h != null, "heart beat is not initialized");
+                Thread.Sleep(600);
+                Assert.IsTrue(!connection.IsClosed, "connection should not be closed");
+                Thread.Sleep(600);
                 Assert.IsTrue(connection.IsClosed, "connection not closed");
             }
 
@@ -236,6 +333,29 @@ namespace Test.Amqp
                 Assert.IsTrue(connection.IsClosed, "connection not closed");
             }).Unwrap().GetAwaiter().GetResult();
 #endif
+        }
+
+        [TestMethod]
+        public void ConnectionHeartBeatCloseTimeoutTest()
+        {
+            this.testListener.RegisterTarget(TestPoint.Close, (stream, channel, fields) =>
+            {
+                return TestOutcome.Stop;
+            });
+
+            string testName = "ConnectionHeartBeatCloseTimeoutTest";
+
+            typeof(Connection).GetField("HeartBeatCloseTimeout", BindingFlags.NonPublic | BindingFlags.Static).SetValue(null, 100);
+            bool closeCalled = false;
+
+            Open open = new Open() { ContainerId = testName, IdleTimeOut = 1000, HostName = this.address.Host };
+            Connection connection = new Connection(this.address, null, open, null);
+            connection.AddClosedCallback((s, e) => closeCalled = true);
+            Session session = new Session(connection);
+            SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
+            sender.Send(new Message("test") { Properties = new Properties() { MessageId = testName } });
+            Thread.Sleep(2200);
+            Assert.IsTrue(closeCalled);
         }
 
         [TestMethod]
@@ -1674,6 +1794,33 @@ namespace Test.Amqp
         }
 
         [TestMethod]
+        public void HandlerSslAuthenticateTest()
+        {
+            Event evt = default(Event);
+
+            var handler = new TestHandler(e =>
+            {
+                if (e.Id == EventId.SslAuthenticate)
+                {
+                    evt = e;
+                }
+            });
+
+            var sslAddress = new Address("amqps://127.0.0.1:" + port);
+            try
+            {
+                Connection connection = new Connection(sslAddress, handler);
+            }
+            catch
+            {
+                // OK to fail as the listener doesnt support SSL
+                // but the event should fire.
+            }
+
+            Assert.AreEqual(EventId.SslAuthenticate, evt.Id);
+        }
+
+        [TestMethod]
         public void HandlerTest()
         {
             string testName = "HandlerTest";
@@ -1685,7 +1832,8 @@ namespace Test.Amqp
 
             Action<Dictionary<EventId, int>> validator = dict =>
             {
-                Assert.AreEqual(10, dict.Count);
+                Assert.AreEqual(11, dict.Count);
+                Assert.AreEqual(1, dict[EventId.SocketConnect]);
                 Assert.AreEqual(1, dict[EventId.ConnectionLocalOpen]);
                 Assert.AreEqual(1, dict[EventId.ConnectionRemoteOpen]);
                 Assert.AreEqual(1, dict[EventId.SessionLocalOpen]);

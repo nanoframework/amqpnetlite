@@ -21,6 +21,7 @@ using Amqp.Types;
 using System;
 using System.Text;
 using System.Threading;
+using Amqp.Handler;
 #if NETFX || NETFX35 || DOTNET
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 #endif
@@ -145,6 +146,110 @@ namespace Test.Amqp
             }
 
             Assert.AreEqual(2, nAttaches);
+            connection.Close();
+        }
+
+#if NETFX || NETFX35 || NETFX_CORE || DOTNET
+        [TestMethod]
+#endif
+        public void TestMethod_MessageDeliveryAccept()
+        {
+            string testName = "MessageDeliveryAccept";
+            Connection connection = new Connection(testTarget.Address);
+            Session session = new Session(connection);
+            SenderLink sender = new SenderLink(session, "sender-" + testName, testTarget.Path);
+            Message message = new Message("msg accept");
+            sender.Send(message, null, null);
+
+            ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            message = receiver.Receive();
+            MessageDelivery messageDelivery = message.GetDelivery();
+            message.Dispose();
+            receiver.Accept(messageDelivery);
+            connection.Close();
+        }
+
+#if NETFX || NETFX35 || NETFX_CORE || DOTNET
+        [TestMethod]
+#endif
+        public void TestMethod_MessageDeliveryRelease()
+        {
+            string testName = "MessageDeliveryRelease";
+            Connection connection = new Connection(testTarget.Address);
+            Session session = new Session(connection);
+            SenderLink sender = new SenderLink(session, "sender-" + testName, testTarget.Path);
+            Message message = new Message("msg release");
+            sender.Send(message, null, null);
+
+            ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            message = receiver.Receive();
+            MessageDelivery messageDelivery = message.GetDelivery();
+            message.Dispose();
+            receiver.Release(messageDelivery);
+            connection.Close();
+        }
+
+#if NETFX || NETFX35 || NETFX_CORE || DOTNET
+        [TestMethod]
+#endif
+        public void TestMethod_MessageDeliveryReject()
+        {
+            string testName = "MessageDeliveryReject";
+            Connection connection = new Connection(testTarget.Address);
+            Session session = new Session(connection);
+            SenderLink sender = new SenderLink(session, "sender-" + testName, testTarget.Path);
+            Message message = new Message("msg reject");
+            sender.Send(message, null, null);
+
+            ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            message = receiver.Receive();
+            MessageDelivery messageDelivery = message.GetDelivery();
+            message.Dispose();
+            receiver.Reject(messageDelivery);
+            connection.Close();
+        }
+
+#if NETFX || NETFX35 || NETFX_CORE || DOTNET
+        [TestMethod]
+#endif
+        public void TestMethod_MessageDeliveryModify()
+        {
+            string testName = "MessageDeliveryModify";
+            Connection connection = new Connection(testTarget.Address);
+            Session session = new Session(connection);
+            SenderLink sender = new SenderLink(session, "sender-" + testName, testTarget.Path);
+            Message message = new Message("msg modify");
+            sender.Send(message, null, null);
+
+            ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            message = receiver.Receive();
+            MessageDelivery messageDelivery = message.GetDelivery();
+            message.Dispose();
+            receiver.Modify(messageDelivery, true);
+            connection.Close();
+        }
+
+#if NETFX || NETFX35 || NETFX_CORE || DOTNET
+        [TestMethod]
+#endif
+        public void TestMethod_MessageDeliveryResend()
+        {
+            string testName = "MessageDeliveryResend";
+            Connection connection = new Connection(testTarget.Address);
+            Session session = new Session(connection);
+            SenderLink sender = new SenderLink(session, "sender-" + testName, testTarget.Path);
+            Message message = new Message("msg resend");
+            sender.Send(message, null, null);
+
+            ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            message = receiver.Receive();
+            MessageDelivery messageDelivery = message.GetDelivery();
+
+            message.Properties = new Properties() { GroupId = "abcdefg" };
+            sender.Send(message, null, null);
+            message.Dispose();
+
+            receiver.Accept(messageDelivery);
             connection.Close();
         }
 
@@ -625,6 +730,68 @@ namespace Test.Amqp
 #if NETFX || NETFX35 || NETFX_CORE || DOTNET
         [TestMethod]
 #endif
+        public void TestMethod_ReceiveDrain()
+        {
+            string testName = "ReceiveDrain";
+            Connection connection = new Connection(testTarget.Address);
+            Session session = new Session(connection);
+
+            SenderLink sender = new SenderLink(session, "sender-" + testName, testTarget.Path);
+            Message msg = new Message() { Properties = new Properties() { MessageId = "12345" } };
+            sender.Send(msg);
+
+            ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            receiver.SetCredit(2, CreditMode.Drain);
+            msg = receiver.Receive();
+            Assert.IsTrue(msg != null);
+
+            msg = new Message() { Properties = new Properties() { MessageId = "67890" } };
+            sender.Send(msg);
+
+            msg = receiver.Receive(TimeSpan.FromTicks(600 * TimeSpan.TicksPerMillisecond));
+            Assert.IsTrue(msg == null);
+
+            connection.Close();
+        }
+
+#if NETFX || NETFX35 || NETFX_CORE || DOTNET
+        [TestMethod]
+#endif
+        public void TestMethod_ReceiveReceiveSend()
+        {
+            string testName = "ReceiveReceiveSend";
+            Connection connection = new Connection(testTarget.Address);
+
+            Session session = new Session(connection);
+            ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            Message msg = receiver.Receive(TimeSpan.FromTicks(500 * TimeSpan.TicksPerMillisecond));
+            Assert.IsTrue(msg == null);
+
+            receiver.Close();
+            session.Close();
+
+            session = new Session(connection);
+            receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            msg = receiver.Receive(TimeSpan.FromTicks(500 * TimeSpan.TicksPerMillisecond));
+            Assert.IsTrue(msg == null);
+
+            Connection connection2 = new Connection(testTarget.Address);
+            Session session2 = new Session(connection2);
+            SenderLink sender = new SenderLink(session2, "sender-" + testName, testTarget.Path);
+            msg = new Message() { Properties = new Properties() { MessageId = "12345" } };
+            sender.Send(msg);
+
+            msg = receiver.Receive(TimeSpan.FromTicks(6000 * TimeSpan.TicksPerMillisecond));
+            Assert.IsTrue(msg != null);
+            receiver.Accept(msg);
+
+            connection2.Close();
+            connection.Close();
+        }
+
+#if NETFX || NETFX35 || NETFX_CORE || DOTNET
+        [TestMethod]
+#endif
         public void TestMethod_ReceiveWaiterZero()
         {
             string testName = "ReceiveWaiterZero";
@@ -894,6 +1061,55 @@ namespace Test.Amqp
             session.Close();
             connection.Close();
         }
+
+#if !NETMF && !NETFX_CORE
+        [TestMethod]
+        public void TestMethod_ProtocolHandler()
+        {
+            string testName = "ProtocolHandler";
+            int nMsgs = 5;
+
+            var handler = new TestHandler(e =>
+            {
+                if (e.Id == EventId.SocketConnect)
+                {
+                    ((System.Net.Sockets.Socket)e.Context).SendBufferSize = 4096;
+                }
+                else if (e.Id == EventId.SslAuthenticate)
+                {
+                    ((System.Net.Security.SslStream)e.Context).AuthenticateAsClient("localhost");
+                }
+            });
+
+            Connection.DisableServerCertValidation = true;
+            Address sslAddress = new Address("amqps://guest:guest@localhost:5671");
+            Connection connection = new Connection(sslAddress, handler);
+            Session session = new Session(connection);
+            SenderLink sender = new SenderLink(session, "sender-" + testName, testTarget.Path);
+
+            for (int i = 0; i < nMsgs; ++i)
+            {
+                Message message = new Message("msg" + i);
+                message.Properties = new Properties() { GroupId = "abcdefg" };
+                message.ApplicationProperties = new ApplicationProperties();
+                message.ApplicationProperties["sn"] = i;
+                sender.Send(message, null, null);
+            }
+
+            ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, testTarget.Path);
+            for (int i = 0; i < nMsgs; ++i)
+            {
+                Message message = receiver.Receive();
+                Trace.WriteLine(TraceLevel.Verbose, "receive: {0}", message.ApplicationProperties["sn"]);
+                receiver.Accept(message);
+            }
+
+            sender.Close();
+            receiver.Close();
+            session.Close();
+            connection.Close();
+        }
+#endif
 
         /// <summary>
         /// This test proves that issue #14 is fixed.

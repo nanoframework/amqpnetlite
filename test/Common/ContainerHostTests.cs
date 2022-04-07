@@ -73,6 +73,7 @@ namespace Test.Amqp
 
         public void TestCleanup()
         {
+            this.host.AddressResolver = null;
             if (this.linkProcessor != null)
             {
                 this.host.UnregisterLinkProcessor(this.linkProcessor);
@@ -91,6 +92,66 @@ namespace Test.Amqp
         {
             this.linkProcessor = null;
             this.ClassCleanup();
+        }
+
+        [TestMethod]
+        public void ContainerHostAddressResolverTest()
+        {
+            string name = "router";
+            var processor = new TestMessageProcessor();
+            this.host.AddressResolver = (h, a) => name;
+            this.host.RegisterMessageProcessor(name, processor);
+
+            int count = 10;
+            var connection = new Connection(Address);
+            var session = new Session(connection);
+
+            for (int i = 0; i < count; i++)
+            {
+                var sender = new SenderLink(session, "send-link", "node" + i);
+                var message = new Message("msg" + i);
+                message.Properties = new Properties() { To = "node" + i };
+                sender.Send(message, null, null);
+                sender.Close();
+            }
+
+            session.Close();
+            connection.Close();
+
+            Assert.AreEqual(count, processor.Messages.Count);
+            for (int i = 0; i < count; i++)
+            {
+                var message = processor.Messages[i];
+                Assert.AreEqual("node" + (i % 10), message.Properties.To);
+            }
+        }
+
+        [TestMethod]
+        public void ContainerHostDynamicProcessorTest()
+        {
+            string name = "ContainerHostDynamicProcessorTest";
+            var processor = new TestMessageProcessor();
+            this.host.AddressResolver = (h, a) =>
+            {
+                h.RegisterMessageProcessor(name, processor);
+                return name;
+            };
+
+            int count = 10;
+            var connection = new Connection(Address);
+            var session = new Session(connection);
+            var sender = new SenderLink(session, "send-link", name);
+
+            for (int i = 0; i < count; i++)
+            {
+                var message = new Message("msg" + i);
+                message.Properties = new Properties() { GroupId = name };
+                sender.Send(message, Timeout);
+            }
+
+            sender.Close();
+            session.Close();
+            connection.Close();
         }
 
         [TestMethod]
@@ -175,6 +236,70 @@ namespace Test.Amqp
             Thread.Sleep(500);
             Assert.AreEqual(released + ignored, source.Count, string.Join(",", messages.Select(m => m.Properties.MessageId)));
             Assert.AreEqual(rejected, source.DeadLetterCount, string.Join(",", source.DeadletterMessage.Select(m => m.Properties.MessageId)));
+        }
+
+        [TestMethod]
+        public void ContainerHostMessageSourceDrainTest()
+        {
+            string name = "ContainerHostMessageSourceDrainTest";
+            int count = 10;
+            Queue<Message> messages = new Queue<Message>();
+            for (int i = 0; i < count; i++)
+            {
+                messages.Enqueue(new Message("test") { Properties = new Properties() { MessageId = name + i } });
+            }
+
+            var source = new TestMessageSource(messages);
+            this.host.RegisterMessageSource(name, source);
+
+            var connection = new Connection(Address);
+            var session = new Session(connection);
+            var receiver = new ReceiverLink(session, "receiver0", name);
+            receiver.SetCredit(count + 4, CreditMode.Drain);
+            for (int i = 1; i <= count; i++)
+            {
+                var message = receiver.Receive();
+                Assert.IsTrue(message != null);
+                receiver.Accept(message);
+            }
+            {
+                messages.Enqueue(new Message("test") { Properties = new Properties() { MessageId = name + count } });
+                var message = receiver.Receive(TimeSpan.FromMilliseconds(500));
+                Assert.IsTrue(message == null);
+            }
+
+            receiver.Close();
+            session.Close();
+            connection.Close();
+        }
+
+        [TestMethod]
+        public void ContainerHostAnyMessageSourceTest()
+        {
+            string name = "*";
+            int count = 10;
+            Queue<Message> messages = new Queue<Message>();
+            for (int i = 0; i < count; i++)
+            {
+                messages.Enqueue(new Message("test") { Properties = new Properties() { MessageId = name + i } });
+            }
+
+            this.host.AddressResolver = (h, a) => name;
+            var source = new TestMessageSource(messages);
+            this.host.RegisterMessageSource(name, source);
+
+            var connection = new Connection(Address);
+            var session = new Session(connection);
+            var receiver = new ReceiverLink(session, "receiver0", null);
+            for (int i = 1; i <= count; i++)
+            {
+                Message message = receiver.Receive();
+                receiver.Accept(message);
+            }
+
+            receiver.Close();
+            session.Close();
+            connection.Close();
         }
 
         [TestMethod]
@@ -888,6 +1013,25 @@ namespace Test.Amqp
         }
 
         [TestMethod]
+        public void ContainerHostListenerCustomSaslMechanismTest()
+        {
+            string name = "ContainerHostListenerCustomSaslMechanismTest";
+            var serverSaslProfile = new CustomSaslProfile(name);
+            this.host.Listeners[0].SASL.EnableMechanism(name, serverSaslProfile);
+            this.host.RegisterMessageProcessor(name, new TestMessageProcessor());
+
+            var factory = new ConnectionFactory();
+            factory.SASL.Profile = new CustomSaslProfile(name);
+            var connection = factory.CreateAsync(new Address(Address.Host, Address.Port, null, null, "/", Address.Scheme)).Result;
+            var session = new Session(connection);
+            var sender = new SenderLink(session, name, name);
+            sender.Send(new Message("msg1"), Timeout);
+            connection.Close();
+
+            Assert.IsTrue(serverSaslProfile.Transport != null);
+        }
+
+        [TestMethod]
         public void ContainerHostSaslPlainNegativeTest()
         {
             var addressWithInvalidPassword = new Address("amqp://guest:invalid@localhost:15672");
@@ -1395,9 +1539,11 @@ namespace Test.Amqp
         {
         }
 
+        public ITransport Transport { get; private set;}
+
         protected override ITransport UpgradeTransport(ITransport transport)
         {
-            return transport;
+            return this.Transport = transport;
         }
 
         protected override DescribedList GetStartCommand(string hostname)
@@ -1411,6 +1557,11 @@ namespace Test.Amqp
 
         protected override DescribedList OnCommand(DescribedList command)
         {
+            if (command.Descriptor.Code == 0x0000000000000041 /* SaslInit.Code */)
+            {
+                return new SaslOutcome() { Code = SaslCode.Ok };
+            }
+
             return null;
         }
     }

@@ -78,7 +78,7 @@ namespace Amqp.Listener
         {
             while (!this.link.IsDetaching)
             {
-                ReceiveContext receiveContext = await this.messageSource.GetMessageAsync(this.link);
+                ReceiveContext receiveContext = await this.messageSource.GetMessageAsync(this.link).ConfigureAwait(false);
                 if (receiveContext != null)
                 {
                     try
@@ -103,6 +103,16 @@ namespace Amqp.Listener
                             new DispositionContext(this.link, receiveContext.Message, new Released(), true));
                         break;
                     }
+                }
+                else if (this.link.IsDraining)
+                {
+                    lock (this.syncRoot)
+                    {
+                        this.receiving = false;
+                    }
+
+                    this.link.CompleteDrain();
+                    break;
                 }
             }
         }

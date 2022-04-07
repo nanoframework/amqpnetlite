@@ -107,10 +107,11 @@ namespace Amqp
 
         internal const uint DefaultMaxFrameSize = 256 * 1024;
         internal const ushort DefaultMaxSessions = 256;
-        internal const int DefaultMaxLinksPerSession = 64;
-        const uint MaxIdleTimeout = 30 * 60 * 1000;
+        internal const int DefaultMaxLinksPerSession = 1024;
+        internal static int HeartBeatCloseTimeout = 20 * 1000;
         readonly Address address;
         readonly OnOpened onOpened;
+        readonly object lockObject;
         IHandler handler;
         Session[] localSessions;
         Session[] remoteSessions;
@@ -119,9 +120,7 @@ namespace Amqp
         uint maxFrameSize;
         uint remoteMaxFrameSize;
         ITransport writer;
-        Pump reader;
         HeartBeat heartBeat;
-        private readonly object lockObject = new object();
 
         Connection(Address address, ushort channelMax, uint maxFrameSize)
         {
@@ -131,6 +130,7 @@ namespace Amqp
             this.remoteMaxFrameSize = uint.MaxValue;
             this.localSessions = new Session[1];
             this.remoteSessions = new Session[1];
+            this.lockObject = new object();
         }
 
         /// <summary>
@@ -141,7 +141,7 @@ namespace Amqp
         /// The connection initialization includes establishing the underlying transport,
         /// which typically has blocking network I/O. Depending on the current synchronization
         /// context, it may cause deadlock or UI freeze. Please use the ConnectionFactory.CreateAsync
-        /// method instead.
+        /// method instead if it is available for the platform.
         /// </remarks>
         public Connection(Address address)
             : this(address, null)
@@ -153,6 +153,12 @@ namespace Amqp
         /// </summary>
         /// <param name="address">The address.</param>
         /// <param name="handler">The protocol handler.</param>
+        /// <remarks>
+        /// The connection initialization includes establishing the underlying transport,
+        /// which typically has blocking network I/O. Depending on the current synchronization
+        /// context, it may cause deadlock or UI freeze. Please use the ConnectionFactory.CreateAsync
+        /// method instead if it is available for the platform.
+        /// </remarks>
         public Connection(Address address, IHandler handler)
             : this(address, DefaultMaxSessions, DefaultMaxFrameSize)
         {
@@ -173,7 +179,7 @@ namespace Amqp
         /// The connection initialization includes establishing the underlying transport,
         /// which typically has blocking network I/O. Depending on the current synchronization
         /// context, it may cause deadlock or UI freeze. Please use the ConnectionFactory.CreateAsync
-        /// method instead.
+        /// method instead if it is available for the platform.
         /// </remarks>
         public Connection(Address address, SaslProfile saslProfile, Open open, OnOpened onOpened)
             : this(address, DefaultMaxSessions, DefaultMaxFrameSize)
@@ -196,16 +202,33 @@ namespace Amqp
         }
 
 #if NETFX || NETFX40 || DOTNET || NETFX_CORE || WINDOWS_STORE || WINDOWS_PHONE
+        static ushort GetChannelMax(AmqpSettings amqpSettings, Open open)
+        {
+            return open != null ? open.ChannelMax : (ushort)(amqpSettings.MaxSessionsPerConnection - 1);
+        }
+
+        static uint GetMaxFrameSize(AmqpSettings amqpSettings, Open open)
+        {
+            return open != null ? open.MaxFrameSize : (uint)amqpSettings.MaxFrameSize;
+        }
+
         internal Connection(IBufferManager bufferManager, AmqpSettings amqpSettings, Address address,
             IAsyncTransport transport, Open open, OnOpened onOpened, IHandler handler)
-            : this(address, (ushort)(amqpSettings.MaxSessionsPerConnection - 1), (uint)amqpSettings.MaxFrameSize)
+            : this(address, DefaultMaxSessions, DefaultMaxFrameSize)
+        {
+            this.onOpened = onOpened;
+            this.handler = handler;
+            this.Init(bufferManager, amqpSettings, transport, open);
+        }
+
+        internal void Init(IBufferManager bufferManager, AmqpSettings amqpSettings, IAsyncTransport transport, Open open)
         {
             transport.SetConnection(this);
 
-            this.handler = handler;
             this.BufferManager = bufferManager;
+            this.channelMax = GetChannelMax(amqpSettings, open);
+            this.maxFrameSize = GetMaxFrameSize(amqpSettings, open);
             this.MaxLinksPerSession = amqpSettings.MaxLinksPerSession;
-            this.onOpened = onOpened;
             this.writer = new TransportWriter(transport, this.OnIoException);
 
             // after getting the transport, move state to open pipe before starting the pump
@@ -217,13 +240,13 @@ namespace Amqp
                     HostName = amqpSettings.HostName ?? this.address.Host,
                     ChannelMax = this.channelMax,
                     MaxFrameSize = this.maxFrameSize,
-                    IdleTimeOut = (uint)amqpSettings.IdleTimeout
+                    IdleTimeOut = (uint)amqpSettings.IdleTimeout / 2
                 };
             }
 
             if (open.IdleTimeOut > 0)
             {
-                this.heartBeat = new HeartBeat(this, open.IdleTimeOut);
+                this.heartBeat = new HeartBeat(this, open.IdleTimeOut * 2);
             }
 
             this.SendHeader();
@@ -231,12 +254,19 @@ namespace Amqp
             this.state = ConnectionState.OpenPipe;
         }
 
+        static ConnectionFactory connectionFactory;
+
         /// <summary>
-        /// Gets a factory with default settings.
+        /// Gets a factory with default settings. Any changes to the settings are
+        /// applied to the connections created from this factory instance.
         /// </summary>
+        /// <remarks>
+        /// On platforms where <seealso cref="ConnectionFactory"/> is supported, this
+        /// is also used for connections initialized by the constructors.
+        /// </remarks>
         public static ConnectionFactory Factory
         {
-            get { return new ConnectionFactory(); }
+            get { return connectionFactory ?? (connectionFactory = new ConnectionFactory()); }
         }
 
         /// <summary>
@@ -269,8 +299,14 @@ namespace Amqp
         {
             return new WrappedByteBuffer(buffer, offset, length);
         }
+
+        void Connect(SaslProfile saslProfile, Open open)
+        {
+            Factory.ConnectAsync(this.address, saslProfile, open, this).ConfigureAwait(false).GetAwaiter().GetResult();
+        }
 #else
         internal int MaxLinksPerSession = DefaultMaxLinksPerSession;
+        Pump reader;
 
         ByteBuffer AllocateBuffer(int size)
         {
@@ -281,7 +317,70 @@ namespace Amqp
         {
             return new ByteBuffer(buffer.Buffer, offset, length, length);
         }
+
+        void Connect(SaslProfile saslProfile, Open open)
+        {
+            if (open != null)
+            {
+                this.maxFrameSize = open.MaxFrameSize;
+                this.channelMax = open.ChannelMax;
+            }
+            else
+            {
+                open = new Open()
+                {
+                    ContainerId = MakeAmqpContainerId(),
+                    HostName = this.address.Host,
+                    MaxFrameSize = this.maxFrameSize,
+                    ChannelMax = this.channelMax
+                };
+            }
+
+            if (open.IdleTimeOut > 0)
+            {
+                this.heartBeat = new HeartBeat(this, open.IdleTimeOut * 2);
+            }
+
+            ITransport transport;
+            {
+                TcpTransport tcpTransport = new TcpTransport();
+                tcpTransport.Connect(this, this.address, DisableServerCertValidation);
+                transport = tcpTransport;
+            }
+
+            try
+            {
+                if (saslProfile != null)
+                {
+                    transport = saslProfile.Open(this.address.Host, transport);
+                }
+                else if (this.address.User != null)
+                {
+                    transport = new SaslPlainProfile(this.address.User, this.address.Password).Open(this.address.Host, transport);
+                }
+            }
+            catch
+            {
+                transport.Close();
+                throw;
+            }
+
+            this.writer = new Writer(transport);
+
+            // after getting the transport, move state to open pipe before starting the pump
+            this.SendHeader();
+            this.SendOpen(open);
+            this.state = ConnectionState.OpenPipe;
+
+            this.reader = new Pump(this, transport);
+            this.reader.Start();
+        }
 #endif
+
+        internal static string MakeAmqpContainerId()
+        {
+            return "AMQPNetLite-" + Guid.NewGuid().ToString().Substring(0, 8);
+        }
 
         internal ushort AddSession(Session session)
         {
@@ -410,73 +509,6 @@ namespace Amqp
                 this.state = newState;
                 return this.state == ConnectionState.End;
             }
-        }
-
-        void Connect(SaslProfile saslProfile, Open open)
-        {
-            if (open != null)
-            {
-                this.maxFrameSize = open.MaxFrameSize;
-                this.channelMax = open.ChannelMax;
-            }
-            else
-            {
-                open = new Open()
-                {
-                    ContainerId = Guid.NewGuid().ToString(),
-                    HostName = this.address.Host,
-                    MaxFrameSize = this.maxFrameSize,
-                    ChannelMax = this.channelMax
-                };
-            }
-
-            if (open.IdleTimeOut > 0)
-            {
-                this.heartBeat = new HeartBeat(this, open.IdleTimeOut);
-            }
-
-            ITransport transport;
-#if NETFX
-            if (WebSocketTransport.MatchScheme(address.Scheme))
-            {
-                WebSocketTransport wsTransport = new WebSocketTransport();
-                wsTransport.ConnectAsync(address, null).ConfigureAwait(false).GetAwaiter().GetResult();
-                transport = wsTransport;
-            }
-            else
-#endif
-            {
-                TcpTransport tcpTransport = new TcpTransport();
-                tcpTransport.Connect(this, this.address, DisableServerCertValidation);
-                transport = tcpTransport;
-            }
-
-            try
-            {
-                if (saslProfile != null)
-                {
-                    transport = saslProfile.Open(this.address.Host, transport);
-                }
-                else if (this.address.User != null)
-                {
-                    transport = new SaslPlainProfile(this.address.User, this.address.Password).Open(this.address.Host, transport);
-                }
-            }
-            catch
-            {
-                transport.Close();
-                throw;
-            }
-
-            this.writer = new Writer(transport);
-
-            // after getting the transport, move state to open pipe before starting the pump
-            this.SendHeader();
-            this.SendOpen(open);
-            this.state = ConnectionState.OpenPipe;
-
-            this.reader = new Pump(this, transport);
-            this.reader.Start();
         }
 
         void ThrowIfClosed(string operation)
@@ -767,7 +799,7 @@ namespace Amqp
             return shouldContinue;
         }
 
-        void OnException(Exception exception)
+        internal void OnException(Exception exception)
         {
             Trace.WriteLine(TraceLevel.Error, "Exception occurred: {0}", exception.ToString());
             AmqpException amqpException = exception as AmqpException;
@@ -847,7 +879,7 @@ namespace Amqp
 
             public void Start(uint remote)
             {
-                this.remote = remote / 2;
+                this.remote = remote;
                 this.lastSend = DateTime.UtcNow;
                 this.lastReceive = DateTime.UtcNow;
                 this.SetTimer();
@@ -876,6 +908,13 @@ namespace Amqp
                 var thisPtr = (HeartBeat)state;
                 try
                 {
+                    if (thisPtr.connection.state == ConnectionState.CloseSent)
+                    {
+                        thisPtr.connection.state = ConnectionState.End;
+                        thisPtr.connection.OnEnded(thisPtr.connection.Error);
+                        return;
+                    }
+
                     DateTime now = DateTime.UtcNow;
                     if (thisPtr.local > 0 &&
                         GetDueMilliseconds(thisPtr.local, now, thisPtr.lastReceive) == 0)
@@ -886,6 +925,7 @@ namespace Amqp
                             {
                                 Description = Fx.Format("Connection closed after idle timeout {0} ms", thisPtr.local)
                             });
+                        thisPtr.SetTimerForClose();
                         return;
                     }
 
@@ -933,6 +973,11 @@ namespace Amqp
                 uint due = localDue < remoteDue ? localDue : remoteDue;
                 Fx.Assert(due < uint.MaxValue, "At least one timeout should be set");
                 this.timer.Change(due > int.MaxValue ? int.MaxValue : (int)due, -1);
+            }
+
+            void SetTimerForClose()
+            {
+                this.timer.Change(HeartBeatCloseTimeout, -1);
             }
         }
 
@@ -1018,6 +1063,11 @@ namespace Amqp
                     ProtocolHeader header = Reader.ReadHeader(this.transport);
                     this.connection.OnHeader(header);
                 }
+                catch (AmqpException amqpException)
+                {
+                    this.connection.OnException(amqpException);
+                    return;
+                }
                 catch (Exception exception)
                 {
                     this.connection.OnIoException(exception);
@@ -1031,6 +1081,10 @@ namespace Amqp
                     {
                         ByteBuffer buffer = Reader.ReadFrameBuffer(this.transport, sizeBuffer, this.connection.maxFrameSize);
                         this.connection.OnFrame(buffer);
+                    }
+                    catch (AmqpException amqpException)
+                    {
+                        this.connection.OnException(amqpException);
                     }
                     catch (Exception exception)
                     {
