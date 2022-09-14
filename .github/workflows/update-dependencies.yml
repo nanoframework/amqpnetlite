@@ -36,3 +36,4 @@ jobs:
           solutionsToCheck: 'amqp-nanoFramework.sln'
           workingDirectory: main
           branchToPr: master
+          repoOwner: Azure
