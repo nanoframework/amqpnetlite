@@ -56,7 +56,7 @@ The application must ensure that the mandatory field, ContainerId, is set to avo
 
 The following example demonstrates the above usages.
 ```
-var connection = new connection(
+var connection = new Connection(
     new Address("amqps://contoso.com:5671"),
 	SaslProfile.Anonymous,
     new Open() { ContainerId = "client.1.2", HostName = "contoso.com", MaxFrameSize = 8 * 1024 },
@@ -176,7 +176,7 @@ Link credit is a mechanism for controlling message flow in AMQP. A receiver issu
 the credits determine the maximum number of messages the remote peer can send to the receiver.  
 By default, the ReceiverLink class manages the link credit automatically. The link credit is decremented
 when message arrives and incremented when application finishes processing it (by calling `ReceiverLink.Accept(Message)`
-or `ReceiverLink.Reject(Message)`). Periodecially new credit limit is communicated to the peer in flow frames.  
+or `ReceiverLink.Reject(Message)`). Periodically new credit limit is communicated to the peer in flow frames.  
 Application can set the initial link credit by calling `ReceiverLink.SetCredit(int, true)` before calling the `Receive`
 method, or setting the value in the Start method when registering the message callback.  
 Application can also fully take over flow control by calling `ReceiverLink.SetCredit(int, false)`. When autoRestore is
