@@ -3,37 +3,23 @@
 
 # This workflow will periodically check .NET nanoFramework dependencies and updates them in the repository it's running.
 
-name: Daily update dependencies
+name: Update .NET nanoFramework dependencies
 
 on:
   schedule:
-    # At 00:00 UTC every day.
-    - cron:  '00 00 * * *'
-  workflow_dispatch:
+  # At 00:10 UTC.
+  - cron:  '10 00 * * Mon,Thu'
   repository_dispatch:
     types: update-dependencies
 
-defaults:
-  run:
-    shell: pwsh
-
 jobs:
-  update-nuget-dependencies:
-    name: Update .NET nanoFramework dependencies
-    timeout-minutes: 180 
-    runs-on: windows-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.NFBOT_GITHUB_ACTIONS }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          path: main
-          ref: master
-      - name: Update dependencies
-        uses: nanoframework/nanodu@v1
-        with:
-          solutionsToCheck: 'amqp-nanoFramework.sln'
-          workingDirectory: main
-          branchToPr: master
-          repoOwner: Azure
+  update-dependencies:
+    name: nanoFramework
+    uses: nanoframework/nf-tools/.github/workflows/update-dependencies.yml@main
+    secrets: inherit
+    with:
+      timeout-minutes: 180
+      solutionsToCheck: 'amqp-nanoFramework.sln'
+      workingDirectory: main
+      branchToPr: master
+      repoOwner: Azure
