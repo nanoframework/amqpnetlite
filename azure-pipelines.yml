@@ -53,10 +53,10 @@ steps:
     feedsToUse: config
     nugetConfigPath: cd/NuGet.config
 
-- task: InstallnFBuildComponents@1
-  displayName: Install nanoFramework MSBuild components
-  env:
-    GITHUB_TOKEN: $(GitHubToken)
+- task: InstallNanoMSBuildComponents@1
+  displayName: Install .NET nanoFramework MSBuild components
+  inputs:
+    GitHubToken: $(GitHubToken)
 
 - task: VSBuild@1
   inputs:
