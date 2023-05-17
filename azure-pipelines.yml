@@ -74,13 +74,13 @@ steps:
         $version = [int]$counter
 
         # NuGet version (following upstream one)
-        $nugetVersion = "2.4.5."
+        $nugetVersion = "2.4.6."
 
         $nugetVersion = $nugetVersion + $version.ToString()
 
         Write-Host "$("##vso[task.setvariable variable=NUGET_VERSION]")$nugetVersion"
     errorActionPreference: 'stop'
-    failOnStderr: 'true'
+    failOnStderr: true
 
 - task: NuGetCommand@2
   displayName: Pack NuGet for AMQPNetLite
