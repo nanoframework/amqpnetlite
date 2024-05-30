@@ -80,13 +80,14 @@ namespace Amqp
         /// <param name="name">The link name.</param>
         /// <param name="attach">The attach frame to send for this link.</param>
         /// <param name="onAttached">The callback to invoke when an attach is received from peer.</param>
+        /// <remarks>Name and Role of attach are replaced with the values from the constructor.</remarks>
         public ReceiverLink(Session session, string name, Attach attach, OnAttached onAttached)
-            : base(session, name, onAttached)
+            : base(session, true, name, onAttached)
         {
             this.totalCredit = -1;
             this.receivedMessages = new LinkedList();
             this.waiterList = new LinkedList();
-            this.SendAttach(true, 0, attach);
+            this.SendAttach(0, attach);
         }
 
         /// <summary>

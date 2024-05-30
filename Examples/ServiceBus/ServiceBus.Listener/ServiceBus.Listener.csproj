@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net472;net5</TargetFrameworks>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <IntermediateOutputPath>../../obj/$(Configuration)/$(MSBuildProjectName)</IntermediateOutputPath>
+    <OutputPath>../../bin/$(Configuration)/$(MSBuildProjectName)</OutputPath>
+    <OutputType>Exe</OutputType>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\..\test\Common\Extensions.cs" Link="Extensions.cs" />
+    <Compile Include="..\..\..\test\Common\TestListener.cs" Link="TestListener.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Amqp.csproj" />
+  </ItemGroup>
+</Project>

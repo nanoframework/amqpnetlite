@@ -228,6 +228,78 @@ namespace Test.Amqp
         }
 
         [TestMethod]
+        public void FlowNextIncomingIdTest()
+        {
+            string testName = "FlowNextIncomingIdTest";
+
+            List flow = null;
+            ManualResetEvent received = new ManualResetEvent(false);
+
+            this.testListener.RegisterTarget(TestPoint.Begin, (stream, channel, fields) =>
+            {
+                return TestOutcome.Stop;
+            });
+
+            this.testListener.RegisterTarget(TestPoint.Attach, (stream, channel, fields) =>
+            {
+                return TestOutcome.Stop;
+            });
+
+            this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
+            {
+                TestListener.FRM(stream, 0x11UL, 0, channel, channel, 0u, 100u, 100u, 8u);
+                TestListener.FRM(stream, 0x12UL, 0, channel, testName, 0u, false, null, null, new Source(), new Target());
+                flow = fields;
+                received.Set();
+                return TestOutcome.Stop;
+            });
+
+            Open open = new Open() { ContainerId = testName, HostName = "localhost", MaxFrameSize = 2048 };
+            Connection connection = new Connection(this.address, null, open, null);
+            Session session = new Session(connection);
+            ReceiverLink receiver = new ReceiverLink(session, testName, "foo");
+            receiver.SetCredit(100);
+            received.WaitOne(3000);
+            connection.Close();
+
+            Assert.IsTrue(flow != null, "flow is null");
+            Assert.IsTrue(flow[0] == null, "next-incoming-id is not null");
+        }
+
+        [TestMethod]
+        public void FlowDeliveryCountTest()
+        {
+            string testName = "FlowDeliveryCountTest";
+
+            List flow = null;
+            ManualResetEvent received = new ManualResetEvent(false);
+
+            this.testListener.RegisterTarget(TestPoint.Attach, (stream, channel, fields) =>
+            {
+                return TestOutcome.Stop;
+            });
+
+            this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
+            {
+                TestListener.FRM(stream, 0x12UL, 0, channel, testName, 0u, false, null, null, new Source(), new Target());
+                flow = fields;
+                received.Set();
+                return TestOutcome.Stop;
+            });
+
+            Open open = new Open() { ContainerId = testName, HostName = "localhost", MaxFrameSize = 2048 };
+            Connection connection = new Connection(this.address, null, open, null);
+            Session session = new Session(connection);
+            ReceiverLink receiver = new ReceiverLink(session, testName, "foo");
+            receiver.SetCredit(100);
+            received.WaitOne(3000);
+            connection.Close();
+
+            Assert.IsTrue(flow != null, "flow is null");
+            Assert.IsTrue(flow[5] == null, "delivery-count is not null");
+        }
+
+        [TestMethod]
         public void RemoteLinkHandleTest()
         {
             this.testListener.RegisterTarget(TestPoint.Begin, (stream, channel, fields) =>
@@ -258,7 +330,7 @@ namespace Test.Amqp
         }
 
         [TestMethod]
-        public void ConnectionRemoteIdleTimeoutTest()
+        public void ConnectionIdleTimeoutRemoteTest()
         {
             ManualResetEvent received = new ManualResetEvent(false);
 
@@ -274,7 +346,7 @@ namespace Test.Amqp
                 return TestOutcome.Continue;
             });
 
-            string testName = "ConnectionRemoteIdleTimeoutTest";
+            string testName = "ConnectionIdleTimeoutRemoteTest";
 
             Trace.WriteLine(TraceLevel.Information, "sync test");
             {
@@ -282,7 +354,7 @@ namespace Test.Amqp
                 Session session = new Session(connection);
                 SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
                 sender.Send(new Message("test") { Properties = new Properties() { MessageId = testName } });
-                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance);
+                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(connection);
                 Assert.IsTrue(h != null, "heart beat is not initialized");
                 Assert.IsTrue(received.WaitOne(5000), "Heartbeat not received");
                 connection.Close();
@@ -297,7 +369,7 @@ namespace Test.Amqp
                 Session session = new Session(connection);
                 SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
                 await sender.SendAsync(new Message("test") { Properties = new Properties() { MessageId = testName } });
-                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance);
+                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(connection);
                 Assert.IsTrue(h != null, "heart beat is not initialized");
                 await Task.Yield();
                 Assert.IsTrue(received.WaitOne(5000), "Heartbeat not received");
@@ -307,9 +379,9 @@ namespace Test.Amqp
         }
 
         [TestMethod]
-        public void ConnectionLocalIdleTimeoutTest()
+        public void ConnectionIdleTimeoutLocalTest()
         {
-            string testName = "ConnectionLocalIdleTimeoutTest";
+            string testName = "ConnectionIdleTimeoutLocalTest";
 
             Trace.WriteLine(TraceLevel.Information, "sync test");
             {
@@ -318,7 +390,7 @@ namespace Test.Amqp
                 Session session = new Session(connection);
                 SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
                 sender.Send(new Message("test") { Properties = new Properties() { MessageId = testName } });
-                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance);
+                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(connection);
                 Assert.IsTrue(h != null, "heart beat is not initialized");
                 Thread.Sleep(600);
                 Assert.IsTrue(!connection.IsClosed, "connection should not be closed");
@@ -337,12 +409,75 @@ namespace Test.Amqp
                 SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
                 await sender.SendAsync(new Message("test") { Properties = new Properties() { MessageId = testName } });
                 await Task.Delay(1200);
-                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance);
+                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(connection);
                 Assert.IsTrue(h != null, "heart beat is not initialized");
                 Assert.IsTrue(connection.IsClosed, "connection not closed");
             }).Unwrap().GetAwaiter().GetResult();
 #endif
         }
+
+        [TestMethod]
+        public void ConnectionIdleTimeoutNoHeartbeatTest()
+        {
+            string testName = "ConnectionIdleTimeoutNoHeartbeatTest";
+
+            Trace.WriteLine(TraceLevel.Information, "sync test");
+            {
+                Open open = new Open() { ContainerId = testName, HostName = "localhost" };
+                Connection connection = new Connection(this.address, null, open, null);
+                Session session = new Session(connection);
+                SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
+                sender.Send(new Message("test") { Properties = new Properties() { MessageId = testName } });
+                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(connection);
+                Assert.IsTrue(h == null, "heart beat should not be initialized");
+                connection.Close();
+            }
+
+#if !NETFX40
+            Trace.WriteLine(TraceLevel.Information, "async test");
+            Task.Factory.StartNew(async () =>
+            {
+                ConnectionFactory factory = new ConnectionFactory();
+                factory.AMQP.IdleTimeout = -1;
+                Connection connection = await factory.CreateAsync(this.address);
+                Session session = new Session(connection);
+                SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
+                await sender.SendAsync(new Message("test") { Properties = new Properties() { MessageId = testName } });
+                var h = connection.GetType().GetField("heartBeat", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(connection);
+                Assert.IsTrue(h == null, "heart beat should not be initialized");
+                await connection.CloseAsync();
+            }).Unwrap().GetAwaiter().GetResult();
+#endif
+        }
+
+#if !NETFX40
+        [TestMethod]
+        public void ConnectionIdleTimeoutNegativeValueTest()
+        {
+            string testName = "ConnectionIdleTimeoutNegativeValueTest";
+            uint? timeout = null;
+            int value = -1000;
+
+            this.testListener.RegisterTarget(TestPoint.Open, (stream, channel, fields) =>
+            {
+                timeout = (uint)fields[4];
+                return TestOutcome.Continue;
+            });
+
+            Task.Factory.StartNew(async () =>
+            {
+                ConnectionFactory factory = new ConnectionFactory();
+                factory.AMQP.IdleTimeout = value;
+                Connection connection = await factory.CreateAsync(this.address);
+                Session session = new Session(connection);
+                SenderLink sender = new SenderLink(session, "sender-" + testName, "any");
+                await sender.SendAsync(new Message("test") { Properties = new Properties() { MessageId = testName } });
+                await connection.CloseAsync();
+            }).Unwrap().GetAwaiter().GetResult();
+
+            Assert.IsTrue(timeout == (uint)value / 2);
+        }
+#endif
 
         [TestMethod]
         public void ConnectionHeartBeatCloseTimeoutTest()
@@ -731,10 +866,13 @@ namespace Test.Amqp
         public void SmallSessionWindowTest()
         {
             ManualResetEvent done = new ManualResetEvent(false);
+
             int window = 37;
             int total = 8000;
             int received = 0;
 
+            this.testListener.WindowSize = (uint)window;
+            this.testListener.LinkCredit = 2000u;
             this.testListener.RegisterTarget(TestPoint.Begin, (stream, channel, fields) =>
             {
                 TestListener.FRM(stream, 0x11UL, 0, channel, channel, 0u, (uint)window, 65536u, 8u);
@@ -754,7 +892,7 @@ namespace Test.Amqp
                     done.Set();
                 }
 
-                return TestOutcome.Continue;
+                return TestOutcome.Stop;
             });
 
             string testName = "SmallSessionWindowTest";
@@ -782,7 +920,7 @@ namespace Test.Amqp
             this.testListener.RegisterTarget(TestPoint.Begin, (stream, channel, fields) =>
             {
                 stream.Dispose();
-                return TestOutcome.Continue;
+                return TestOutcome.Stop;
             });
 
             Trace.WriteLine(TraceLevel.Information, "sync test");
@@ -802,7 +940,8 @@ namespace Test.Amqp
                 Connection connection = await Connection.Factory.CreateAsync(this.address);
                 connection.Closed += (o, e) => closed.Set();
                 Session session = new Session(connection);
-                Assert.IsTrue(closed.WaitOne(5000), "closed event not fired");
+                await Task.Factory.StartNew(o => ((ManualResetEvent)o).WaitOne(5000), closed);
+                Assert.IsTrue(closed.WaitOne(10), "closed event not fired");
                 Assert.AreEqual(ErrorCode.ConnectionForced, (string)connection.Error.Condition);
             }).Unwrap().GetAwaiter().GetResult();
         }
@@ -1053,8 +1192,9 @@ namespace Test.Amqp
         {
             this.testListener.RegisterTarget(TestPoint.Open, (stream, channel, fields) =>
             {
-                stream.Dispose();
-                return TestOutcome.Continue;
+                TestListener.FRM(stream, 0x10UL, 0, 0, "Test"); // open
+                TestListener.FRM(stream, 0x18UL, 0, channel, new Error(ErrorCode.UnauthorizedAccess)); // close
+                return TestOutcome.Stop;
             });
 
             Trace.WriteLine(TraceLevel.Information, "sync test");
@@ -1063,7 +1203,7 @@ namespace Test.Amqp
                 Connection connection = new Connection(this.address);
                 connection.AddClosedCallback((o, e) => closed.Set());
                 Assert.IsTrue(closed.WaitOne(5000), "closed event not fired");
-                Assert.AreEqual(ErrorCode.ConnectionForced, (string)connection.Error.Condition);
+                Assert.AreEqual(ErrorCode.UnauthorizedAccess, (string)connection.Error.Condition);
                 closed.Reset();
                 connection.AddClosedCallback((o, e) => closed.Set());
                 Assert.IsTrue(closed.WaitOne(5000), "closed event not fired again");
@@ -1075,8 +1215,9 @@ namespace Test.Amqp
                 ManualResetEvent closed = new ManualResetEvent(false);
                 Connection connection = await Connection.Factory.CreateAsync(this.address);
                 connection.AddClosedCallback((o, e) => closed.Set());
-                Assert.IsTrue(closed.WaitOne(5000), "closed event not fired");
-                Assert.AreEqual(ErrorCode.ConnectionForced, (string)connection.Error.Condition);
+                await Task.Factory.StartNew(o => ((ManualResetEvent)o).WaitOne(5000), closed);
+                Assert.IsTrue(closed.WaitOne(10), "closed event not fired");
+                Assert.AreEqual(ErrorCode.UnauthorizedAccess, (string)connection.Error.Condition);
                 closed.Reset();
                 connection.AddClosedCallback((o, e) => closed.Set());
                 Assert.IsTrue(closed.WaitOne(5000), "closed event not fired again");
@@ -1455,7 +1596,8 @@ namespace Test.Amqp
                 connection.Closed += (s, a) => closed.Set();
                 Session session = new Session(connection);
                 ReceiverLink receiver = new ReceiverLink(session, "receiver-" + testName, "any");
-                Assert.IsTrue(closed.WaitOne(5000), "Connection not closed");
+                await Task.Factory.StartNew(o => ((ManualResetEvent)o).WaitOne(5000), closed);
+                Assert.IsTrue(closed.WaitOne(10), "Connection not closed");
                 Assert.AreEqual(ErrorCode.TransferLimitExceeded, (string)connection.Error.Condition);
                 Assert.IsTrue(receiver.IsClosed);
             }).Unwrap().GetAwaiter().GetResult();
@@ -1469,7 +1611,7 @@ namespace Test.Amqp
             this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
             {
                 uint current = total;
-                total = (uint)fields[5] + (uint)fields[6];
+                total = (uint)(fields[5] ?? 0u) + (uint)fields[6];
                 for (uint i = current; i < total; i++)
                 {
                     TestListener.FRM(stream, 0x14UL, 0, channel, fields[4], i, BitConverter.GetBytes(i), 0u, false, false);  // transfer
@@ -1507,7 +1649,7 @@ namespace Test.Amqp
             this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
             {
                 uint current = total;
-                total = (uint)fields[5] + (uint)fields[6];
+                total = (uint)(fields[5] ?? 0u) + (uint)fields[6];
                 for (uint i = current; i < total; i++)
                 {
                     TestListener.FRM(stream, 0x14UL, 0, channel, fields[4], i, BitConverter.GetBytes(i), 0u, false, false);  // transfer
@@ -1557,7 +1699,7 @@ namespace Test.Amqp
             this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
             {
                 uint current = total;
-                uint limit = (uint)fields[5] + (uint)fields[6];
+                uint limit = (uint)(fields[5] ?? 0u) + (uint)fields[6];
                 if (limit > total)
                 {
                     total = limit;
@@ -1599,7 +1741,7 @@ namespace Test.Amqp
             this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
             {
                 uint current = total;
-                total = Math.Max(total, (uint)fields[5] + (uint)fields[6]);
+                total = Math.Max(total, (uint)(fields[5] ?? id) + (uint)fields[6]);
                 for (uint i = current; i < total; i++)
                 {
                     TestListener.FRM(stream, 0x14UL, 0, channel, fields[4], id, BitConverter.GetBytes(id), 0u, false, false);  // transfer
@@ -1641,7 +1783,7 @@ namespace Test.Amqp
             this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
             {
                 uint current = total;
-                total = Math.Max(total, (uint)fields[5] + (uint)fields[6]);
+                total = Math.Max(total, (uint)(fields[5] ?? id) + (uint)fields[6]);
                 for (uint i = current; i < total; i++)
                 {
                     TestListener.FRM(stream, 0x14UL, 0, channel, fields[4], id, BitConverter.GetBytes(id), 0u, false, false);  // transfer
@@ -1679,7 +1821,6 @@ namespace Test.Amqp
 
             this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
             {
-                uint dc = (uint)fields[5];
                 uint credit = (uint)fields[6];
                 for (uint i = 0; i < available; i++)
                 {
@@ -1794,8 +1935,10 @@ namespace Test.Amqp
                 Connection connection = await Connection.Factory.CreateAsync(this.address);
                 connection.Closed += (o, e) => closedNotified.Set();
                 Session session = new Session(connection);
-                Assert.IsTrue(closeReceived.WaitOne(5000), "Close not received");
-                Assert.IsTrue(closedNotified.WaitOne(5000), "Closed event not fired");
+                await Task.Factory.StartNew(o => ((ManualResetEvent)o).WaitOne(5000), closeReceived);
+                await Task.Factory.StartNew(o => ((ManualResetEvent)o).WaitOne(5000), closedNotified);
+                Assert.IsTrue(closeReceived.WaitOne(10), "Close not received");
+                Assert.IsTrue(closedNotified.WaitOne(10), "Closed event not fired");
                 Assert.AreEqual(ErrorCode.NotFound, (string)connection.Error.Condition);
                 Assert.IsTrue(session.IsClosed);
                 Assert.IsTrue(connection.IsClosed);
