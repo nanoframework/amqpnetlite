@@ -30,6 +30,7 @@ variables:
   - name: solution
     value: './amqpnetlite/amqp-nanoFramework.sln'
   # creates a counter called versioncounter and assigns it to the minor variable
+  # when updating this, make sure to update the $nugetVersion below
   - name: REVISION
     value: $[counter('versioncounter_2_4_11', 1)]
 
@@ -80,7 +81,8 @@ steps:
         $version = [int]$counter
 
         # NuGet version (following upstream one)
-        $nugetVersion = "2.4.6."
+        # when updating this, make sure to update the versioncounter_ variable above 
+        $nugetVersion = "2.4.11."
 
         $nugetVersion = $nugetVersion + $version.ToString()
 
