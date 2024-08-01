@@ -31,7 +31,7 @@ variables:
     value: './amqpnetlite/amqp-nanoFramework.sln'
   # creates a counter called versioncounter and assigns it to the minor variable
   - name: REVISION
-    value: $[counter('versioncounter_2_4_5', 1)]
+    value: $[counter('versioncounter_2_4_11', 1)]
 
 steps:
 
@@ -124,8 +124,7 @@ steps:
     .\sign code azure-key-vault `
     "**/*.nupkg" `
     --base-directory "$(Build.ArtifactStagingDirectory)" `
-    --file-list "$(Build.Repository.LocalPath)\config\filelist.txt" `
-    --description "$(nugetPackageName)" `
+    --description "AMQP Lite nanoFramework build" `
     --description-url "https://github.com/$env:Build_Repository_Name" `
     --azure-key-vault-tenant-id "$(SignTenantId)" `
     --azure-key-vault-client-id "$(SignClientId)" `
