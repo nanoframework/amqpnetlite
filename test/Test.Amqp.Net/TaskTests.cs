@@ -168,6 +168,23 @@ namespace Test.Amqp
             await connection.CloseAsync();
         }
 
+#if !NETFX_CORE
+        [TestMethod]
+        public async Task ConnectionFactoryCancelAsync()
+        {
+            // Invalid address for test
+            var address = new Address("amqp://192.0.2.3:5672");
+            try
+            {
+                Connection connection = await Connection.Factory.CreateAsync(address, new CancellationTokenSource(300).Token);
+                Assert.IsTrue(false, "Connection creation should have been cancelled.");
+            }
+            catch (TaskCanceledException)
+            {
+            }
+        }
+#endif
+
         [TestMethod]
         public async Task ReceiverSenderAsync()
         {
