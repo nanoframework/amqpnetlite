@@ -51,8 +51,6 @@ steps:
     Contents: NuGet.config
     TargetFolder: $(Build.SourcesDirectory)/amqpnetlite
 
-- template: azure-pipelines-templates/install-nuget.yml@templates
-
 - task: NuGetCommand@2
   displayName: NuGet restore
   inputs:
@@ -150,18 +148,6 @@ steps:
     PathtoPublish: '$(Build.ArtifactStagingDirectory)'
     ArtifactName: deployables
     ArtifactType: Container
-
-# push NuGet packages to Azure Artifacts feed (always happens except on PR builds)
-- task: NuGetCommand@2
-  displayName: Push NuGet packages to Azure Artifacts
-  condition: and(succeeded(), eq(variables['System.PullRequest.PullRequestId'], ''))
-  continueOnError: true
-  inputs:
-    command: push
-    nuGetFeedType: external
-    packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
-    publishFeedCredentials: 'AzureArtifacts-amqplite'
-    allowPackageConflicts: true
 
 # push NuGet packages to NuGet feed (always happens except on PR builds)
 - task: NuGetCommand@2
