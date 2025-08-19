@@ -192,6 +192,7 @@ namespace Amqp.Listener
                     this.deliveryCount = attach.InitialDeliveryCount;
                 }
 
+                this.SettleOnSend = attach.SndSettleMode == SenderSettleMode.Settled;
                 this.SendAttach(attach.InitialDeliveryCount, attach);
             }
 
