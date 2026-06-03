@@ -10,13 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     steps: 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.NFBOT_GITHUB_ACTIONS }}
 
       - name: Merge from upstream repo
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.2
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.3
         with:
           target_sync_branch: nanoframework-dev
           upstream_sync_branch: master
