@@ -300,6 +300,53 @@ namespace Test.Amqp
         }
 
         [TestMethod]
+        public void FlowLinkStatePropertiesCallbackTest()
+        {
+            string testName = "FlowLinkStatePropertiesCallbackTest";
+            ManualResetEvent received = new ManualResetEvent(false);
+            ILink observedLink = null;
+            Fields observedProps = null;
+
+            this.testListener.RegisterTarget(TestPoint.Attach, (stream, channel, fields) =>
+            {
+                return TestOutcome.Stop;
+            });
+
+            this.testListener.RegisterTarget(TestPoint.Flow, (stream, channel, fields) =>
+            {
+                TestListener.FRM(stream, 0x12UL, 0, channel, testName, 0u, false, null, null, new Source(), new Target());
+                var linkProps = new Fields();
+                linkProps[new Symbol("x-test-link-state")] = true;
+                TestListener.FRM(stream, 0x13UL, 0, channel,
+                    0u, this.testListener.WindowSize, 0u, this.testListener.WindowSize,
+                    fields[4], fields[5], fields[6],
+                    0u, false, false,
+                    linkProps);
+                return TestOutcome.Stop;
+            });
+
+            Open open = new Open() { ContainerId = testName, HostName = "localhost", MaxFrameSize = 2048 };
+            Connection connection = new Connection(this.address, null, open, null);
+            Session session = new Session(connection);
+            ReceiverLink receiver = new ReceiverLink(session, testName, "foo");
+            receiver.OnLinkStateProperties = (link, props) =>
+            {
+                observedLink = link;
+                observedProps = props;
+                received.Set();
+            };
+
+            receiver.SetCredit(100);
+            Assert.IsTrue(received.WaitOne(3000), "OnLinkStateProperties not invoked");
+            connection.Close();
+
+            Assert.IsTrue(object.ReferenceEquals(receiver, observedLink));
+            Assert.IsTrue(observedProps != null);
+            Assert.IsTrue(observedProps.Count > 0);
+            Assert.IsTrue((bool)observedProps[new Symbol("x-test-link-state")]);
+        }
+
+        [TestMethod]
         public void RemoteLinkHandleTest()
         {
             this.testListener.RegisterTarget(TestPoint.Begin, (stream, channel, fields) =>
@@ -2052,7 +2099,7 @@ namespace Test.Amqp
 
             Action<Dictionary<EventId, int>> validator = dict =>
             {
-                Assert.AreEqual(11, dict.Count);
+                Assert.AreEqual(12, dict.Count);
                 Assert.AreEqual(1, dict[EventId.SocketConnect]);
                 Assert.AreEqual(1, dict[EventId.ConnectionLocalOpen]);
                 Assert.AreEqual(1, dict[EventId.ConnectionRemoteOpen]);
@@ -2066,6 +2113,7 @@ namespace Test.Amqp
                 Assert.AreEqual(1, dict[EventId.ReceiveDelivery]);
                 Assert.AreEqual(1, dict[EventId.ConnectionLocalClose]);
                 Assert.AreEqual(1, dict[EventId.ConnectionRemoteClose]);
+                Assert.AreEqual(1, dict[EventId.DeliveryStateChanged]);
             };
 
             Trace.WriteLine(TraceLevel.Information, "sync test");
