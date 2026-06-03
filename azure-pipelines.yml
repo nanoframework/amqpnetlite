@@ -32,7 +32,7 @@ variables:
   # creates a counter called versioncounter and assigns it to the minor variable
   # when updating this, make sure to update the $nugetVersion below
   - name: REVISION
-    value: $[counter('versioncounter_2_4_11', 1)]
+    value: $[counter('versioncounter_2_5_3', 1)]
 
 steps:
 
@@ -80,7 +80,7 @@ steps:
 
         # NuGet version (following upstream one)
         # when updating this, make sure to update the versioncounter_ variable above 
-        $nugetVersion = "2.4.11."
+        $nugetVersion = "2.5.3."
 
         $nugetVersion = $nugetVersion + $version.ToString()
 
