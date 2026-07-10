@@ -1558,7 +1558,7 @@ namespace Test.Amqp
             {
                 System.Diagnostics.Trace.WriteLine("If the test fails with System.Net.HttpListenerException (0x80004005): Access is denied");
                 System.Diagnostics.Trace.WriteLine("Run the following command with admin privilege:");
-                System.Diagnostics.Trace.WriteLine("netsh http add urlacl url=http://+:28080/test/ user=domain\\user");
+                System.Diagnostics.Trace.WriteLine("netsh http add urlacl url=http://+:28080/test/ sddl=D:(A;;GX;;;AU)");
                 throw;
             }
             finally

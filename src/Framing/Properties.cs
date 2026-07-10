@@ -223,12 +223,12 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {
                 case 0:
-                    this.messageId = Encoder.ReadObject(buffer, formatCode);
+                    this.messageId = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 1:
                     this.userId = Encoder.ReadBinary(buffer, formatCode);
@@ -243,7 +243,7 @@ namespace Amqp.Framing
                     this.replyTo = Encoder.ReadString(buffer, formatCode);
                     break;
                 case 5:
-                    this.correlationId = Encoder.ReadObject(buffer, formatCode);
+                    this.correlationId = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 6:
                     this.contentType = Encoder.ReadSymbol(buffer, formatCode);

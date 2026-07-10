@@ -47,7 +47,7 @@ namespace Amqp.Types
             Encoder.WriteULong(buffer, this.descriptor.Code, true);
         }
 
-        internal override void DecodeDescriptor(ByteBuffer buffer)
+        internal override void DecodeDescriptor(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
             var formatCode = Encoder.ReadFormatCode(buffer);
             if (formatCode == FormatCode.Described)

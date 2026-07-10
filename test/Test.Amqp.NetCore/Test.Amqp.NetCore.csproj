@@ -127,6 +127,9 @@
     <Compile Include="..\Common\TaskTests.cs">
       <Link>TaskTests.cs</Link>
     </Compile>
+    <Compile Include="..\Common\DecoderTests.cs">
+      <Link>DecoderTests.cs</Link>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

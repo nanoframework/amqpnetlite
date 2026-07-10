@@ -187,7 +187,7 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {
@@ -207,22 +207,22 @@ namespace Amqp.Framing
                     this.dynamic = Encoder.ReadBoolean(buffer, formatCode);
                     break;
                 case 5:
-                    this.dynamicNodeProperties = Encoder.ReadFields(buffer, formatCode);
+                    this.dynamicNodeProperties = Encoder.ReadFields(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 6:
                     this.distributionMode = Encoder.ReadSymbol(buffer, formatCode);
                     break;
                 case 7:
-                    this.filterSet = Encoder.ReadMap(buffer, formatCode);
+                    this.filterSet = Encoder.ReadMap(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 8:
-                    this.defaultOutcome = (Outcome)Encoder.ReadObject(buffer, formatCode);
+                    this.defaultOutcome = (Outcome)Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 9:
-                    this.outcomes = Encoder.ReadObject(buffer, formatCode);
+                    this.outcomes = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 10:
-                    this.capabilities = Encoder.ReadObject(buffer, formatCode);
+                    this.capabilities = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 default:
                     Fx.Assert(false, "Invalid field index");

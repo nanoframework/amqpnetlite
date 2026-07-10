@@ -255,7 +255,7 @@ namespace Amqp
             }
 
             this.WriteDelivery(delivery);
-            MaybeFireOnLinkStateProperties(flow);
+            this.MaybeFireOnLinkStateProperties(flow);
         }
 
         internal override void OnTransfer(Delivery delivery, Transfer transfer, ByteBuffer buffer)

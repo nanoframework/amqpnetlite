@@ -129,7 +129,7 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
             // Should never be called directly.
             throw new InvalidOperationException();

@@ -47,9 +47,9 @@ namespace Amqp.Framing
             Encoder.WriteList(buffer, this.List, true);
         }
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
-            this.List = Encoder.ReadList(buffer, Encoder.ReadFormatCode(buffer));
+            this.List = Encoder.ReadList(buffer, Encoder.ReadFormatCode(buffer), depth, ref totalUnboundedSize);
         }
     }
 }

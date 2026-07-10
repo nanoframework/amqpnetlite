@@ -70,7 +70,7 @@ namespace Amqp.Transactions
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {
@@ -78,7 +78,7 @@ namespace Amqp.Transactions
                     this.txnId = Encoder.ReadBinary(buffer, formatCode);
                     break;
                 case 1:
-                    this.outcome = (Outcome)Encoder.ReadObject(buffer, formatCode);
+                    this.outcome = (Outcome)Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 default:
                     Fx.Assert(false, "Invalid field index");

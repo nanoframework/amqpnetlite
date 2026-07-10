@@ -65,14 +65,14 @@ namespace Amqp.Types
             Encoder.WriteObject(buffer, this.value);
         }
 
-        internal override void DecodeDescriptor(ByteBuffer buffer)
+        internal override void DecodeDescriptor(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
-            this.descriptor = Encoder.ReadObject(buffer);
+            this.descriptor = Encoder.ReadObject(buffer, depth, ref totalUnboundedSize);
         }
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
-            this.value = Encoder.ReadObject(buffer);
+            this.value = Encoder.ReadObject(buffer, depth, ref totalUnboundedSize);
         }
 
 #if TRACE

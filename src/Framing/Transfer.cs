@@ -194,7 +194,7 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {
@@ -220,7 +220,7 @@ namespace Amqp.Framing
                     this.rcvSettleMode = (ReceiverSettleMode)Encoder.ReadUByte(buffer, formatCode);
                     break;
                 case 7:
-                    this.state = (DeliveryState)Encoder.ReadObject(buffer, formatCode);
+                    this.state = (DeliveryState)Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 8:
                     this.resume = Encoder.ReadBoolean(buffer, formatCode);

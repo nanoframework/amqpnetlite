@@ -97,14 +97,14 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
             // initialize the value buffer only
             int offset = buffer.Offset;
             byte formatCode = Encoder.ReadFormatCode(buffer);
             while (formatCode == FormatCode.Described)
             {
-                Encoder.ReadObject(buffer);
+                Encoder.ReadObject(buffer, depth, ref totalUnboundedSize);
                 formatCode = Encoder.ReadFormatCode(buffer);
             }
 
@@ -164,9 +164,9 @@ namespace Amqp.Framing
             Encoder.WriteObject(buffer, this.value);
         }
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
-            this.value = Encoder.ReadObject(buffer);
+            this.value = Encoder.ReadObject(buffer, depth, ref totalUnboundedSize);
         }
 #endif
     }

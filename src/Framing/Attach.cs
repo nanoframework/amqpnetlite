@@ -225,7 +225,7 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {
@@ -245,13 +245,13 @@ namespace Amqp.Framing
                     this.rcvSettleMode = (ReceiverSettleMode)Encoder.ReadUByte(buffer, formatCode);
                     break;
                 case 5:
-                    this.source = Encoder.ReadObject(buffer, formatCode);
+                    this.source = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 6:
-                    this.target = Encoder.ReadObject(buffer, formatCode);
+                    this.target = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 7:
-                    this.unsettled = Encoder.ReadMap(buffer, formatCode);
+                    this.unsettled = Encoder.ReadMap(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 8:
                     this.incompleteUnsettled = Encoder.ReadBoolean(buffer, formatCode);
@@ -263,13 +263,13 @@ namespace Amqp.Framing
                     this.maxMessageSize = Encoder.ReadULong(buffer, formatCode);
                     break;
                 case 11:
-                    this.offeredCapabilities = Encoder.ReadObject(buffer, formatCode);
+                    this.offeredCapabilities = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 12:
-                    this.desiredCapabilities = Encoder.ReadObject(buffer, formatCode);
+                    this.desiredCapabilities = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 13:
-                    this.properties = Encoder.ReadFields(buffer, formatCode);
+                    this.properties = Encoder.ReadFields(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 default:
                     Fx.Assert(false, "Invalid field index");
