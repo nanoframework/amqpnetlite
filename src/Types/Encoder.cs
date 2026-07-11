@@ -92,6 +92,38 @@ namespace Amqp.Types
             }
         }
 
+        /// <summary>
+        /// Maximum nesting depth accepted while decoding compound AMQP types
+        /// (described, list, map, array).
+        /// </summary>
+        internal const int MaxNestingDepth = 64;
+
+        /// <summary>
+        /// Maximum cumulative in-memory size (in bytes) allowed for elements whose
+        /// wire encoding is zero-width (UInt0, ULong0, List0, BooleanTrue/False).
+        /// Applied per top-level decode call.
+        /// </summary>
+        internal const int MaxUnboundedSize = 64 * 1024;
+
+        internal static void CheckMaxNestingDepth(int depth)
+        {
+            if (depth > MaxNestingDepth)
+            {
+                throw DecodeErrorException("AMQP object graph depth " + depth + " exceeds maximum (" + MaxNestingDepth + ").");
+            }
+        }
+
+        internal static void TrackUnboundedSize(ref int totalUnboundedSize, int addedSize)
+        {
+            long total = (long)totalUnboundedSize + addedSize;
+            if (total > MaxUnboundedSize)
+            {
+                throw DecodeErrorException("Total unbounded element size " + total + " exceeds maximum (" + MaxUnboundedSize + ").");
+            }
+
+            totalUnboundedSize = (int)total;
+        }
+
         internal static void Initialize()
         {
             knownDescribed = new Map();
@@ -954,8 +986,14 @@ namespace Amqp.Types
         /// <param name="buffer">The buffer to read.</param>
         public static object ReadObject(ByteBuffer buffer)
         {
+            int totalUnboundedSize = 0;
+            return ReadObject(buffer, 0, ref totalUnboundedSize);
+        }
+
+        internal static object ReadObject(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
+        {
             byte formatCode = Encoder.ReadFormatCode(buffer);
-            return ReadObject(buffer, formatCode);
+            return ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
         }
 
         /// <summary>
@@ -966,20 +1004,40 @@ namespace Amqp.Types
         /// <returns></returns>
         public static object ReadObject(ByteBuffer buffer, byte formatCode)
         {
+            int totalUnboundedSize = 0;
+            return ReadObject(buffer, formatCode, 0, ref totalUnboundedSize);
+        }
+
+        internal static object ReadObject(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize)
+        {
+            // Dispatch compound format codes to the tracking overloads so depth
+            // and totalUnboundedSize thread through nested decoding. The default
+            // Serializer.Decoder delegate would call the non-tracking public overload.
+            switch (formatCode)
+            {
+                case FormatCode.Described:
+                    return ReadDescribed(buffer, formatCode, depth, ref totalUnboundedSize);
+                case FormatCode.List0:
+                case FormatCode.List8:
+                case FormatCode.List32:
+                    return ReadList(buffer, formatCode, depth, ref totalUnboundedSize);
+                case FormatCode.Map8:
+                case FormatCode.Map32:
+                    return ReadMap(buffer, formatCode, depth, ref totalUnboundedSize);
+                case FormatCode.Array8:
+                case FormatCode.Array32:
+                    return ReadArray(buffer, formatCode, depth, ref totalUnboundedSize);
+            }
+
             Serializer serializer = GetSerializer(formatCode);
             if (serializer != null)
             {
                 return serializer.Decoder(buffer, formatCode);
             }
 
-            if (formatCode == FormatCode.Described)
-            {
-                return ReadDescribed(buffer, formatCode);
-            }
-
             throw InvalidFormatCodeException(formatCode, buffer.Offset);
         }
-        
+
         /// <summary>
         /// Reads a described value from a buffer.
         /// </summary>
@@ -987,7 +1045,14 @@ namespace Amqp.Types
         /// <param name="formatCode">The format code of the value.</param>
         public static object ReadDescribed(ByteBuffer buffer, byte formatCode)
         {
+            int totalUnboundedSize = 0;
+            return ReadDescribed(buffer, formatCode, 0, ref totalUnboundedSize);
+        }
+
+        internal static object ReadDescribed(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize)
+        {
             Fx.Assert(formatCode == FormatCode.Described, "Format code must be described (0)");
+            CheckMaxNestingDepth(depth);
             Described described;
 
             CreateDescribed create = null;
@@ -1003,19 +1068,19 @@ namespace Amqp.Types
             else
 #endif
             {
-                descriptor = Encoder.ReadObject(buffer, descriptorFormatCode);
+                descriptor = Encoder.ReadObject(buffer, descriptorFormatCode, depth + 1, ref totalUnboundedSize);
                 create = (CreateDescribed) knownDescribed[descriptor];
             }
             
             if (create == null)
             {
-                object value = Encoder.ReadObject(buffer);
+                object value = Encoder.ReadObject(buffer, depth + 1, ref totalUnboundedSize);
                 described = new DescribedValue(descriptor, value);
             }
             else
             {
                 described = create();
-                described.DecodeValue(buffer);
+                described.DecodeValue(buffer, depth + 1, ref totalUnboundedSize);
             }
 
             return described;
@@ -1388,19 +1453,27 @@ namespace Amqp.Types
         /// <param name="formatCode">The format code of the value.</param>
         public static List ReadList(ByteBuffer buffer, byte formatCode)
         {
+            int totalUnboundedSize = 0;
+            return ReadList(buffer, formatCode, 0, ref totalUnboundedSize);
+        }
+
+        internal static List ReadList(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize)
+        {
             if (formatCode == FormatCode.Null)
             {
                 return null;
             }
 
+            CheckMaxNestingDepth(depth);
+
             int size;
             int count;
-            ReadListCount(buffer, formatCode, out size, out count);
+            ReadCollectionSizeAndCount(buffer, formatCode, FormatCode.List8, FormatCode.List32, true, out size, out count);
 
             List value = new List(count);
             for (int i = 0; i < count; ++i)
             {
-                value.Add(ReadObject(buffer));
+                value.Add(ReadObject(buffer, depth + 1, ref totalUnboundedSize));
             }
 
             return value;
@@ -1413,27 +1486,22 @@ namespace Amqp.Types
         /// <param name="formatCode">The format code of the value.</param>
         public static Array ReadArray(ByteBuffer buffer, byte formatCode)
         {
+            int totalUnboundedSize = 0;
+            return ReadArray(buffer, formatCode, 0, ref totalUnboundedSize);
+        }
+
+        internal static Array ReadArray(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize)
+        {
             if (formatCode == FormatCode.Null)
             {
                 return null;
             }
 
+            CheckMaxNestingDepth(depth);
+
             int size;
             int count;
-            if (formatCode == FormatCode.Array8)
-            {
-                size = AmqpBitConverter.ReadUByte(buffer);
-                count = AmqpBitConverter.ReadUByte(buffer);
-            }
-            else if (formatCode == FormatCode.Array32)
-            {
-                size = (int)AmqpBitConverter.ReadUInt(buffer);
-                count = (int)AmqpBitConverter.ReadUInt(buffer);
-            }
-            else
-            {
-                throw InvalidFormatCodeException(formatCode, buffer.Offset);
-            }
+            ReadCollectionSizeAndCount(buffer, formatCode, FormatCode.Array8, FormatCode.Array32, false, out size, out count);
 
             formatCode = Encoder.ReadFormatCode(buffer);
             Serializer codec = GetSerializer(formatCode);
@@ -1442,11 +1510,36 @@ namespace Amqp.Types
                 throw InvalidFormatCodeException(formatCode, buffer.Offset);
             }
 
+            // Validate count against buffer length. Zero-width element codes
+            // consume no wire bytes per item; account for them via the
+            // per-decode totalUnboundedSize. Non-zero-width elements consume
+            // at least one wire byte each, so count is bounded by buffer.Length.
+            int uSize = GetUnboundedElementSize(formatCode);
+            if (uSize > 0)
+            {
+                TrackUnboundedSize(ref totalUnboundedSize, uSize * count);
+            }
+            else if (count > buffer.Length)
+            {
+                throw DecodeErrorException("AMQP array count " + count + " exceeds buffer length (" + buffer.Length + ").");
+            }
+
             Array value = Array.CreateInstance(codec.Type, count);
             IList list = value;
             for (int i = 0; i < count; ++i)
             {
-                list[i] = codec.Decoder(buffer, formatCode);
+                // Compound element types (List/Map/Array/Described) route through
+                // the tracking ReadObject overload so depth and totalUnboundedSize
+                // are threaded into the item decode. All other element types use
+                // the Serializer.Decoder delegate directly.
+                if (IsCompoundFormatCode(formatCode))
+                {
+                    list[i] = ReadObject(buffer, formatCode, depth + 1, ref totalUnboundedSize);
+                }
+                else
+                {
+                    list[i] = codec.Decoder(buffer, formatCode);
+                }
             }
 
             return value;
@@ -1460,7 +1553,13 @@ namespace Amqp.Types
         /// <param name="formatCode">The format code of the value.</param>
         public static Map ReadMap(ByteBuffer buffer, byte formatCode)
         {
-            return ReadMap<Map>(buffer, formatCode);
+            int totalUnboundedSize = 0;
+            return ReadMap(buffer, formatCode, 0, ref totalUnboundedSize);
+        }
+
+        internal static Map ReadMap(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize)
+        {
+            return ReadMap<Map>(buffer, formatCode, depth, ref totalUnboundedSize);
         }
 
         /// <summary>
@@ -1470,32 +1569,27 @@ namespace Amqp.Types
         /// <param name="formatCode">The format code of the value.</param>
         public static Fields ReadFields(ByteBuffer buffer, byte formatCode)
         {
-            return ReadMap<Fields>(buffer, formatCode);
+            int totalUnboundedSize = 0;
+            return ReadMap<Fields>(buffer, formatCode, 0, ref totalUnboundedSize);
         }
 
-        private static T ReadMap<T>(ByteBuffer buffer, byte formatCode) where T : Map, new()
+        internal static Fields ReadFields(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize)
+        {
+            return ReadMap<Fields>(buffer, formatCode, depth, ref totalUnboundedSize);
+        }
+
+        private static T ReadMap<T>(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize) where T : Map, new()
         {
             if (formatCode == FormatCode.Null)
             {
                 return null;
             }
 
+            CheckMaxNestingDepth(depth);
+
             int size;
             int count;
-            if (formatCode == FormatCode.Map8)
-            {
-                size = AmqpBitConverter.ReadUByte(buffer);
-                count = AmqpBitConverter.ReadUByte(buffer);
-            }
-            else if (formatCode == FormatCode.Map32)
-            {
-                size = (int)AmqpBitConverter.ReadUInt(buffer);
-                count = (int)AmqpBitConverter.ReadUInt(buffer);
-            }
-            else
-            {
-                throw InvalidFormatCodeException(formatCode, buffer.Offset);
-            }
+            ReadCollectionSizeAndCount(buffer, formatCode, FormatCode.Map8, FormatCode.Map32, true, out size, out count);
 
             if (count % 2 > 0)
             {
@@ -1505,7 +1599,9 @@ namespace Amqp.Types
             T value = new T();
             for (int i = 0; i < count; i += 2)
             {
-                value.Add(ReadObject(buffer), ReadObject(buffer));
+                object key = ReadObject(buffer, depth + 1, ref totalUnboundedSize);
+                object val = ReadObject(buffer, depth + 1, ref totalUnboundedSize);
+                value.Add(key, val);
             }
 
             return value;
@@ -1520,27 +1616,22 @@ namespace Amqp.Types
         /// <param name="formatCode">The format code of the value.</param>
         public static Map ReadMap(ByteBuffer buffer, byte formatCode)
         {
+            int totalUnboundedSize = 0;
+            return ReadMap(buffer, formatCode, 0, ref totalUnboundedSize);
+        }
+
+        internal static Map ReadMap(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize)
+        {
             if (formatCode == FormatCode.Null)
             {
                 return null;
             }
 
+            CheckMaxNestingDepth(depth);
+
             int size;
             int count;
-            if (formatCode == FormatCode.Map8)
-            {
-                size = AmqpBitConverter.ReadUByte(buffer);
-                count = AmqpBitConverter.ReadUByte(buffer);
-            }
-            else if (formatCode == FormatCode.Map32)
-            {
-                size = (int)AmqpBitConverter.ReadUInt(buffer);
-                count = (int)AmqpBitConverter.ReadUInt(buffer);
-            }
-            else
-            {
-                throw InvalidFormatCodeException(formatCode, buffer.Offset);
-            }
+            ReadCollectionSizeAndCount(buffer, formatCode, FormatCode.Map8, FormatCode.Map32, true, out size, out count);
 
             if (count % 2 > 0)
             {
@@ -1550,7 +1641,9 @@ namespace Amqp.Types
             Map value = new Map();
             for (int i = 0; i < count; i += 2)
             {
-                value.Add(ReadObject(buffer), ReadObject(buffer));
+                object key = ReadObject(buffer, depth + 1, ref totalUnboundedSize);
+                object val = ReadObject(buffer, depth + 1, ref totalUnboundedSize);
+                value.Add(key, val);
             }
 
             return value;
@@ -1565,27 +1658,22 @@ namespace Amqp.Types
         /// <param name="formatCode">The format code of the value.</param>
         public static Fields ReadFields(ByteBuffer buffer, byte formatCode)
         {
+            int totalUnboundedSize = 0;
+            return ReadFields(buffer, formatCode, 0, ref totalUnboundedSize);
+        }
+
+        internal static Fields ReadFields(ByteBuffer buffer, byte formatCode, int depth, ref int totalUnboundedSize)
+        {
             if (formatCode == FormatCode.Null)
             {
                 return null;
             }
 
+            CheckMaxNestingDepth(depth);
+
             int size;
             int count;
-            if (formatCode == FormatCode.Map8)
-            {
-                size = AmqpBitConverter.ReadUByte(buffer);
-                count = AmqpBitConverter.ReadUByte(buffer);
-            }
-            else if (formatCode == FormatCode.Map32)
-            {
-                size = (int)AmqpBitConverter.ReadUInt(buffer);
-                count = (int)AmqpBitConverter.ReadUInt(buffer);
-            }
-            else
-            {
-                throw InvalidFormatCodeException(formatCode, buffer.Offset);
-            }
+            ReadCollectionSizeAndCount(buffer, formatCode, FormatCode.Map8, FormatCode.Map32, true, out size, out count);
 
             if (count % 2 > 0)
             {
@@ -1595,7 +1683,9 @@ namespace Amqp.Types
             Fields value = new Fields();
             for (int i = 0; i < count; i += 2)
             {
-                value.Add(ReadObject(buffer), ReadObject(buffer));
+                object key = ReadObject(buffer, depth + 1, ref totalUnboundedSize);
+                object val = ReadObject(buffer, depth + 1, ref totalUnboundedSize);
+                value.Add(key, val);
             }
 
             return value;
@@ -1616,25 +1706,70 @@ namespace Amqp.Types
             return null;
         }
 
-        internal static void ReadListCount(ByteBuffer buffer, byte formatCode, out int size, out int count)
+        internal static void ReadCollectionSizeAndCount(ByteBuffer buffer, byte formatCode, byte formatCode8,
+            byte formatCode32, bool checkMaxCount, out int size, out int count)
         {
             if (formatCode == FormatCode.List0)
             {
                 size = count = 0;
+                return;
             }
-            else if (formatCode == FormatCode.List8)
+
+            int countFieldWidth;
+            if (formatCode == formatCode8)
             {
                 size = AmqpBitConverter.ReadUByte(buffer);
                 count = AmqpBitConverter.ReadUByte(buffer);
+                countFieldWidth = FixedWidth.UByte;
             }
-            else if (formatCode == FormatCode.List32)
+            else if (formatCode == formatCode32)
             {
                 size = (int)AmqpBitConverter.ReadUInt(buffer);
                 count = (int)AmqpBitConverter.ReadUInt(buffer);
+                countFieldWidth = FixedWidth.UInt;
             }
             else
             {
                 throw InvalidFormatCodeException(formatCode, buffer.Offset);
+            }
+
+            if (count < 0 || (checkMaxCount && count > buffer.Length))
+            {
+                throw DecodeErrorException("Collection count " + (uint)count + " exceeds limit.");
+            }
+
+            // Per AMQP spec, size = count-field bytes + element bytes.
+            // After reading size and count, buffer.Length is the remaining element bytes.
+            if (size < 0 || size > buffer.Length + countFieldWidth)
+            {
+                throw DecodeErrorException("Collection size " + size + " exceeds limit.");
+            }
+        }
+
+        static bool IsCompoundFormatCode(byte formatCode)
+        {
+            return formatCode == FormatCode.List0
+                || formatCode == FormatCode.List8  || formatCode == FormatCode.List32
+                || formatCode == FormatCode.Map8   || formatCode == FormatCode.Map32
+                || formatCode == FormatCode.Array8 || formatCode == FormatCode.Array32
+                || formatCode == FormatCode.Described;
+        }
+
+        static int GetUnboundedElementSize(byte formatCode)
+        {
+            switch (formatCode)
+            {
+                case FormatCode.BooleanTrue:
+                case FormatCode.BooleanFalse:
+                    return 1;   // one byte per bool in the decoded array
+                case FormatCode.UInt0:
+                    return FixedWidth.UInt;
+                case FormatCode.ULong0:
+                    return FixedWidth.ULong;
+                case FormatCode.List0:
+                    return 8;   // one empty List reference
+                default:
+                    return 0;
             }
         }
 
@@ -1714,6 +1849,11 @@ namespace Amqp.Types
         {
             return new Exception(type.Name + " not supported");
         }
+
+        static Exception DecodeErrorException(string message)
+        {
+            return new Exception(message);
+        }
 #else
         internal static AmqpException InvalidFormatCodeException(byte formatCode, int offset)
         {
@@ -1731,6 +1871,11 @@ namespace Amqp.Types
         {
             return new AmqpException(ErrorCode.NotImplemented,
                 Fx.Format(SRAmqp.EncodingTypeNotSupported, type));
+        }
+
+        static AmqpException DecodeErrorException(string message)
+        {
+            return new AmqpException(ErrorCode.DecodeError, message);
         }
 #endif
 

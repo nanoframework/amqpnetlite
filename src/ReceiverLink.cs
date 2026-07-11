@@ -369,7 +369,7 @@ namespace Amqp
                 }
             }
 
-            MaybeFireOnLinkStateProperties(flow);
+            this.MaybeFireOnLinkStateProperties(flow);
 
         }
 

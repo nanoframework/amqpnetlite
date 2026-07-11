@@ -84,7 +84,7 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
             this.Buffer = Encoder.ReadBinaryBuffer(buffer);
         }
@@ -108,7 +108,7 @@ namespace Amqp.Framing
             Encoder.WriteBinary(buffer, this.binary, true);
         }
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
             this.binary = Encoder.ReadBinary(buffer, Encoder.ReadFormatCode(buffer));
         }

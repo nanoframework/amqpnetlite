@@ -377,18 +377,18 @@ namespace Amqp.Types
         }
 #endif
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
             byte formatCode = Encoder.ReadFormatCode(buffer);
             int size;
             int count;
-            Encoder.ReadListCount(buffer, formatCode, out size, out count);
+            Encoder.ReadCollectionSizeAndCount(buffer, formatCode, FormatCode.List8, FormatCode.List32, true, out size, out count);
             for (int i = 0; i < count; i++)
             {
                 formatCode = Encoder.ReadFormatCode(buffer);
                 if (formatCode != FormatCode.Null)
                 {
-                    this.ReadField(buffer, i, formatCode);
+                    this.ReadField(buffer, i, formatCode, depth, ref totalUnboundedSize);
                     this.fields |= (1 << i);
                 }
             }
@@ -396,7 +396,7 @@ namespace Amqp.Types
 
         internal abstract void WriteField(ByteBuffer buffer, int index);
 
-        internal abstract void ReadField(ByteBuffer buffer, int index, byte formatCode);
+        internal abstract void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize);
         
 
         internal override void EncodeValue(ByteBuffer buffer)

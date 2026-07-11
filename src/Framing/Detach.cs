@@ -82,7 +82,7 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {
@@ -93,7 +93,7 @@ namespace Amqp.Framing
                     this.closed = Encoder.ReadBoolean(buffer, formatCode);
                     break;
                 case 2:
-                    this.error = (Error)Encoder.ReadObject(buffer, formatCode);
+                    this.error = (Error)Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 default:
                     Fx.Assert(false, "Invalid field index");

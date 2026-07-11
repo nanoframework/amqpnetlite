@@ -107,17 +107,46 @@ namespace Test.Common
         public static X509Certificate2 GetCertificate(string certFindValue)
         {
             X509Certificate2 cert = null;
-            if (TryGetCertificate(StoreLocation.LocalMachine, StoreName.My, certFindValue, out cert))
+            if (TryGetCertificate(StoreLocation.CurrentUser, StoreName.My, certFindValue, out cert)
+                && HasAccessiblePrivateKey(cert))
             {
                 return cert;
             }
 
-            if (TryGetCertificate(StoreLocation.CurrentUser, StoreName.My, certFindValue, out cert))
+            if (TryGetCertificate(StoreLocation.LocalMachine, StoreName.My, certFindValue, out cert)
+                && HasAccessiblePrivateKey(cert))
             {
                 return cert;
             }
 
-            throw new ArgumentException("No certificate can be found using the find value " + certFindValue);
+            throw new ArgumentException("No certificate with an accessible private key can be found using the find value " + certFindValue);
+        }
+
+        static bool HasAccessiblePrivateKey(X509Certificate2 cert)
+        {
+            if (cert == null || !cert.HasPrivateKey)
+            {
+                return false;
+            }
+
+            try
+            {
+                // Force key material to load. Throws CryptographicException if the
+                // current process token has no access to the key container.
+#if NET48 || DOTNET
+                using (var rsa = cert.GetRSAPrivateKey())
+                {
+                    return rsa != null;
+                }
+#else
+                var pk = cert.PrivateKey;
+                return pk != null;
+#endif
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static bool TryGetCertificate(StoreLocation storeLocation, StoreName storeName, string certFindValue, out X509Certificate2 cert)

@@ -66,7 +66,7 @@ namespace Amqp.Sasl
 
             public Task<DescribedList> Task => this.task;
 
-            internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+            internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
             {
                 throw new NotImplementedException();
             }

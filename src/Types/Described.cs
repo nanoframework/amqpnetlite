@@ -39,17 +39,24 @@ namespace Amqp.Types
         /// <param name="buffer">The buffer to read.</param>
         public void Decode(ByteBuffer buffer)
         {
+            int totalUnboundedSize = 0;
+            this.Decode(buffer, 0, ref totalUnboundedSize);
+        }
+
+        internal void Decode(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
+        {
+            Encoder.CheckMaxNestingDepth(depth);
             Encoder.ReadFormatCode(buffer);
-            this.DecodeDescriptor(buffer);
-            this.DecodeValue(buffer);
+            this.DecodeDescriptor(buffer, depth + 1, ref totalUnboundedSize);
+            this.DecodeValue(buffer, depth + 1, ref totalUnboundedSize);
         }
 
         internal abstract void EncodeDescriptor(ByteBuffer buffer);
 
         internal abstract void EncodeValue(ByteBuffer buffer);
 
-        internal abstract void DecodeDescriptor(ByteBuffer buffer);
+        internal abstract void DecodeDescriptor(ByteBuffer buffer, int depth, ref int totalUnboundedSize);
 
-        internal abstract void DecodeValue(ByteBuffer buffer);
+        internal abstract void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize);
     }
 }

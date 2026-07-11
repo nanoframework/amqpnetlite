@@ -57,12 +57,12 @@ namespace Amqp.Transactions
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {
                 case 0:
-                    this.globalId = Encoder.ReadObject(buffer, formatCode);
+                    this.globalId = Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 default:
                     Fx.Assert(false, "Invalid field index");

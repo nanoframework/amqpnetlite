@@ -65,6 +65,9 @@
     <Compile Include="..\Common\AmqpCodecTests.cs">
       <Link>AmqpCodecTests.cs</Link>
     </Compile>
+    <Compile Include="..\Common\DecoderTests.cs">
+      <Link>DecoderTests.cs</Link>
+    </Compile>
     <Compile Include="..\Common\Extensions.cs">
       <Link>Common\Extensions.cs</Link>
     </Compile>

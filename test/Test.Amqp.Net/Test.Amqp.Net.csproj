@@ -11,7 +11,26 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../Common/**/*.cs;../../src/Net/TypeExtensions.cs;../../Examples/Serialization/Serialization.Poco/PocoContractResolver.cs;../../Examples/Serialization/Serialization.Poco/Shape.cs" />
+    <!-- Test classes stay visible at project root. -->
+    <Compile Include="../Common/*Tests.cs">
+      <Link>%(Filename)%(Extension)</Link>
+    </Compile>
+    <!-- Supporting/helper files grouped under Include. -->
+    <Compile Include="../Common/*.cs" Exclude="../Common/*Tests.cs">
+      <Link>Include\%(Filename)%(Extension)</Link>
+    </Compile>
+    <Compile Include="../Common/Types/*.cs">
+      <Link>Include\%(Filename)%(Extension)</Link>
+    </Compile>
+    <Compile Include="../../src/Net/TypeExtensions.cs">
+      <Link>Include\TypeExtensions.cs</Link>
+    </Compile>
+    <Compile Include="../../Examples/Serialization/Serialization.Poco/PocoContractResolver.cs">
+      <Link>Include\PocoContractResolver.cs</Link>
+    </Compile>
+    <Compile Include="../../Examples/Serialization/Serialization.Poco/Shape.cs">
+      <Link>Include\Shape.cs</Link>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>

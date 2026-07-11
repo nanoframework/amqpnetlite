@@ -65,9 +65,9 @@ namespace Amqp.Types
             }
         }
 
-        internal override void DecodeValue(ByteBuffer buffer)
+        internal override void DecodeValue(ByteBuffer buffer, int depth, ref int totalUnboundedSize)
         {
-            this.map = Encoder.ReadMap(buffer, Encoder.ReadFormatCode(buffer));
+            this.map = Encoder.ReadMap(buffer, Encoder.ReadFormatCode(buffer), depth, ref totalUnboundedSize);
         }
 
         internal override void EncodeValue(ByteBuffer buffer)

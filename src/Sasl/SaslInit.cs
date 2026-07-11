@@ -83,7 +83,7 @@ namespace Amqp.Sasl
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {

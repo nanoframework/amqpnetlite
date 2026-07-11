@@ -121,7 +121,7 @@ namespace Amqp.Framing
             }
         }
 
-        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode)
+        internal override void ReadField(ByteBuffer buffer, int index, byte formatCode, int depth, ref int totalUnboundedSize)
         {
             switch (index)
             {
@@ -138,7 +138,7 @@ namespace Amqp.Framing
                     this.settled = Encoder.ReadBoolean(buffer, formatCode);
                     break;
                 case 4:
-                    this.state = (DeliveryState)Encoder.ReadObject(buffer, formatCode);
+                    this.state = (DeliveryState)Encoder.ReadObject(buffer, formatCode, depth, ref totalUnboundedSize);
                     break;
                 case 5:
                     this.batchable = Encoder.ReadBoolean(buffer, formatCode);
