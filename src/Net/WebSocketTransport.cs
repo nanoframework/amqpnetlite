@@ -88,15 +88,30 @@ namespace Amqp
 
         async Task<int> IAsyncTransport.ReceiveAsync(byte[] buffer, int offset, int count)
         {
-            var result = await this.webSocket
-                .ReceiveAsync(new ArraySegment<byte>(buffer, offset, count), CancellationToken.None)
-                .ConfigureAwait(false);
-            if (result.MessageType == WebSocketMessageType.Close)
+            while (true)
             {
-                return 0;
-            }
+                var result = await this.webSocket
+                    .ReceiveAsync(new ArraySegment<byte>(buffer, offset, count), CancellationToken.None)
+                    .ConfigureAwait(false);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    return 0;
+                }
 
-            return result.Count;
+                if (result.Count > 0)
+                {
+                    return result.Count;
+                }
+
+                // A zero-length result with the socket still open is not end-of-stream.
+                // It happens when the permessage-deflate extension consumes an inbound
+                // frame without emitting any output yet. Loop and wait for real bytes
+                // instead of reporting the transport as closed.
+                if (this.webSocket.State != WebSocketState.Open)
+                {
+                    return 0;
+                }
+            }
         }
 
         async Task IAsyncTransport.SendAsync(IList<ByteBuffer> bufferList, int listSize)
