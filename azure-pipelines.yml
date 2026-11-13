@@ -1,0 +1,25 @@
+# Copyright (c) .NET Foundation and Contributors
+# See LICENSE file in the project root for full license information.
+
+# Enable YAML CI triggers in Azure DevOps rather than overriding them in the UI.
+trigger:
+  branches:
+    include:
+      - nanoframework-dev
+      - develop
+
+pr: none
+
+resources:
+  repositories:
+    - repository: cd
+      type: github
+      endpoint: nanoframework
+      name: nanoframework/amqpnetlite
+      ref: refs/heads/cd-nanoframework
+
+extends:
+  template: azure-pipelines-template.yml@cd
+  parameters:
+    sourceBranch: ${{ variables['Build.SourceBranchName'] }}
+    buildFromSource: true
