@@ -18,7 +18,7 @@ jobs:
       - name: Merge from upstream repo
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.2
         with:
-          target_sync_branch: nanoframework-dev
+          target_sync_branch: nano-master
           upstream_sync_branch: master
           upstream_sync_repo: Azure/amqpnetlite
 

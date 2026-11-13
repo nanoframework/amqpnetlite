@@ -9,10 +9,10 @@ parameters:
   - name: sourceBranch
     displayName: AMQP source branch
     type: string
-    default: nanoframework-dev
+    default: nano-master
     values:
-      - nanoframework-dev
-      - develop
+      - nano-master
+      - nano-develop
 
 extends:
   template: azure-pipelines-template.yml

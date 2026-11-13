@@ -5,10 +5,10 @@ parameters:
   - name: sourceBranch
     displayName: AMQP source branch
     type: string
-    default: nanoframework-dev
+    default: nano-master
     values:
-      - nanoframework-dev
-      - develop
+      - nano-master
+      - nano-develop
   - name: buildFromSource
     type: boolean
     default: false
@@ -29,7 +29,7 @@ resources:
 jobs:
 - job: Publish
   pool:
-    ${{ if eq(parameters.sourceBranch, 'develop') }}:
+    ${{ if eq(parameters.sourceBranch, 'nano-develop') }}:
       vmImage: 'windows-2025-vs2026'
     ${{ else }}:
       vmImage: 'windows-latest'
@@ -45,7 +45,7 @@ jobs:
     - name: solution
       value: './amqpnetlite/amqp-nanoFramework.sln'
     # Keep the upstream version and counter names in sync with $nugetVersion below.
-    - ${{ if eq(parameters.sourceBranch, 'develop') }}:
+    - ${{ if eq(parameters.sourceBranch, 'nano-develop') }}:
       - name: REVISION
         value: $[counter('versioncounter_2_5_5_preview', 1)]
     - ${{ else }}:
@@ -103,7 +103,7 @@ jobs:
     displayName: Install .NET nanoFramework MSBuild components
     inputs:
       GitHubToken: $(GitHubToken)
-      usePreview: ${{ eq(parameters.sourceBranch, 'develop') }}
+      usePreview: ${{ eq(parameters.sourceBranch, 'nano-develop') }}
 
   - task: VSBuild@1
     inputs:
@@ -123,7 +123,7 @@ jobs:
           # NuGet version (following upstream one)
           # when updating this, make sure to update the versioncounter_ variable above
           $nugetVersion = "2.5.5"
-          if ($env:AMQP_SOURCE_BRANCH -eq 'develop')
+          if ($env:AMQP_SOURCE_BRANCH -eq 'nano-develop')
           {
               $nugetVersion += "-preview.$version"
           }
