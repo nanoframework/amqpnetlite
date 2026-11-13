@@ -264,8 +264,15 @@ IF NOT "%build-sln:amqp-netmf.sln=%" == "%build-sln%" (
   )
 )
 IF NOT "%build-sln:amqp-nanoFramework.sln=%" == "%build-sln%" (
+  SET source-commit=
+  FOR /F %%H IN ('git rev-parse --verify HEAD') DO SET source-commit=%%H
+  IF "!source-commit!" == "" (
+    ECHO Cannot determine the nanoFramework package source revision.
+    SET return-code=1
+    GOTO :exit
+  )
   FOR %%G IN (AMQPNetLite.nanoFramework AMQPNetMicro.nanoFramework) DO (
-    "%NuGetPath%" pack .\nuspec\%%G.nuspec -Version %build-version% -BasePath .\ -OutputDirectory ".\Build\Packages" -Properties NoWarn=NU5101
+    "%NuGetPath%" pack .\nuspec\%%G.nuspec -Version %build-version% -BasePath .\ -OutputDirectory ".\Build\Packages" -Properties "NoWarn=NU5101;commit=!source-commit!"
     IF ERRORLEVEL 1 (
       SET return-code=1
       GOTO :exit

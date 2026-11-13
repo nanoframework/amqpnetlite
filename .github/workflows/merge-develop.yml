@@ -1,0 +1,40 @@
+# Copyright (c) .NET Foundation and Contributors
+# See LICENSE file in the project root for full license information.
+
+name: Merge into develop
+
+on:
+  schedule:
+    - cron: '05 00 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: merge-nanoframework-dev-into-develop
+  cancel-in-progress: false
+
+jobs:
+  merge-into-develop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.NFBOT_GITHUB_ACTIONS }}
+
+      - name: Merge nanoframework-dev into develop
+        id: sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "GH Action - Upstream Sync"
+          git config user.email "action@github.com"
+          git fetch --no-tags origin nanoframework-dev
+          git merge --no-edit origin/nanoframework-dev
+          git push origin HEAD:develop
+
+      - name: Report synchronization failure
+        if: failure() && steps.sync.outcome == 'failure'
+        run: |
+          echo "::error::Could not merge nanoframework-dev into develop. Check the sync logs and resolve any conflicts manually; no forced update is performed."
