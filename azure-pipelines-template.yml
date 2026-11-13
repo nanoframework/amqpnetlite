@@ -87,6 +87,8 @@ jobs:
       Contents: NuGet.config
       TargetFolder: $(Build.SourcesDirectory)/amqpnetlite
 
+  - template: azure-pipelines-templates/install-nuget.yml@templates
+
   - task: NuGetCommand@2
     displayName: NuGet restore
     inputs:
