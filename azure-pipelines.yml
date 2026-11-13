@@ -5,8 +5,8 @@
 trigger:
   branches:
     include:
-      - nanoframework-dev
-      - develop
+      - nano-master
+      - nano-develop
 
 pr: none
 
