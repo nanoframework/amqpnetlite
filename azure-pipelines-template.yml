@@ -1,0 +1,220 @@
+# Copyright (c) .NET Foundation and Contributors
+# See LICENSE file in the project root for full license information.
+
+parameters:
+  - name: sourceBranch
+    displayName: AMQP source branch
+    type: string
+    default: nanoframework-dev
+    values:
+      - nanoframework-dev
+      - develop
+  - name: buildFromSource
+    type: boolean
+    default: false
+
+# add nf-tools repo to resources (for Azure Pipelines templates)
+resources:
+  repositories:
+    - repository: templates
+      type: github
+      name: nanoframework/nf-tools
+      endpoint: nfbot
+    - repository: amqpnetlite
+      type: github
+      endpoint: nanoframework
+      name: nanoframework/amqpnetlite
+      ref: ${{ parameters.sourceBranch }}
+
+jobs:
+- job: Publish
+  pool:
+    ${{ if eq(parameters.sourceBranch, 'develop') }}:
+      vmImage: 'windows-2025-vs2026'
+    ${{ else }}:
+      vmImage: 'windows-latest'
+
+  variables:
+    - group: sign-client-credentials
+    - name: DOTNET_NOLOGO
+      value: true
+    - name: buildPlatform
+      value: 'Any CPU'
+    - name: buildConfiguration
+      value: 'Release'
+    - name: solution
+      value: './amqpnetlite/amqp-nanoFramework.sln'
+    # Keep the upstream version and counter names in sync with $nugetVersion below.
+    - ${{ if eq(parameters.sourceBranch, 'develop') }}:
+      - name: REVISION
+        value: $[counter('versioncounter_2_5_5_preview', 1)]
+    - ${{ else }}:
+      - name: REVISION
+        value: $[counter('versioncounter_2_5_5', 1)]
+
+  steps:
+
+  # Source-branch entry points build self to preserve the triggering commit.
+  - ${{ if eq(parameters.buildFromSource, true) }}:
+    - checkout: cd
+      fetchDepth: 1
+      path: s/cd
+    - checkout: self
+      fetchDepth: 0
+      path: s/amqpnetlite
+  - ${{ else }}:
+    - checkout: self
+      fetchDepth: 1
+      path: s/cd
+    - checkout: amqpnetlite
+      fetchDepth: 0
+      path: s/amqpnetlite
+  - checkout: templates
+    fetchDepth: 1
+
+  - task: PowerShell@2
+    displayName: Report AMQP source revision
+    inputs:
+      targetType: inline
+      workingDirectory: $(Build.SourcesDirectory)/amqpnetlite
+      script: |
+        $commit = git rev-parse HEAD
+        if ($LASTEXITCODE -ne 0) { throw "Could not determine the AMQP source revision." }
+        Write-Host "Building $env:AMQP_SOURCE_BRANCH at $commit"
+        Write-Host "##vso[task.setvariable variable=AMQP_SOURCE_COMMIT]$commit"
+    env:
+      AMQP_SOURCE_BRANCH: ${{ parameters.sourceBranch }}
+
+  - task: CopyFiles@1
+    displayName: Copy NuGet.config
+    inputs:
+      sourceFolder: $(Build.SourcesDirectory)/cd
+      Contents: NuGet.config
+      TargetFolder: $(Build.SourcesDirectory)/amqpnetlite
+
+  - task: NuGetCommand@2
+    displayName: NuGet restore
+    inputs:
+      restoreSolution: '$(solution)'
+      feedsToUse: config
+      nugetConfigPath: cd/NuGet.config
+
+  - task: InstallNanoMSBuildComponents@1
+    displayName: Install .NET nanoFramework MSBuild components
+    inputs:
+      GitHubToken: $(GitHubToken)
+      usePreview: ${{ eq(parameters.sourceBranch, 'develop') }}
+
+  - task: VSBuild@1
+    inputs:
+      solution: '$(solution)'
+      platform: '$(buildPlatform)'
+      configuration: '$(buildConfiguration)'
+      msbuildArchitecture: 'x64'
+
+  - task: PowerShell@2
+    displayName: Tweak NuGet package version
+    inputs:
+      targetType: 'inline'
+      script: |
+          $counter = $env:REVISION
+          $version = [int]$counter
+
+          # NuGet version (following upstream one)
+          # when updating this, make sure to update the versioncounter_ variable above
+          $nugetVersion = "2.5.5"
+          if ($env:AMQP_SOURCE_BRANCH -eq 'develop')
+          {
+              $nugetVersion += "-preview.$version"
+          }
+          else
+          {
+              $nugetVersion += ".$version"
+          }
+
+          Write-Host "$("##vso[task.setvariable variable=NUGET_VERSION]")$nugetVersion"
+      errorActionPreference: 'stop'
+      failOnStderr: true
+    env:
+      AMQP_SOURCE_BRANCH: ${{ parameters.sourceBranch }}
+
+  - task: NuGetCommand@2
+    displayName: Pack NuGet for AMQPNetLite
+    condition: succeeded()
+    inputs:
+      command: 'custom'
+      arguments: 'pack .\amqpnetlite\nuspec\AMQPNetLite.nanoFramework.nuspec -Version $(NUGET_VERSION) -BasePath $(Build.SourcesDirectory)\amqpnetlite -Properties commit=$(AMQP_SOURCE_COMMIT)'
+
+  - task: NuGetCommand@2
+    displayName: Pack NuGet for AMQPNetMicro
+    condition: succeeded()
+    inputs:
+      command: 'custom'
+      arguments: 'pack .\amqpnetlite\nuspec\AMQPNetMicro.nanoFramework.nuspec -Version $(NUGET_VERSION) -BasePath $(Build.SourcesDirectory)\amqpnetlite -Properties commit=$(AMQP_SOURCE_COMMIT)'
+
+  - task: CopyFiles@1
+    displayName: Collecting deployable artifacts
+    condition: succeeded()
+    inputs:
+      sourceFolder: $(Build.SourcesDirectory)
+      Contents: |
+        **\AMQP*.nupkg
+      TargetFolder: '$(Build.ArtifactStagingDirectory)'
+      flattenFolders: true
+
+  - task: DotNetCoreCLI@2
+    displayName: Install SignTool tool
+    condition: and(succeeded(), eq(variables['System.PullRequest.PullRequestId'], ''))
+    inputs:
+      command: custom
+      custom: tool
+      arguments: install --tool-path . sign --version 0.9.1-beta.23530.1
+
+  - pwsh: |
+      .\sign code azure-key-vault `
+      "**/*.nupkg" `
+      --base-directory "$(Build.ArtifactStagingDirectory)" `
+      --description "AMQP Lite nanoFramework build" `
+      --description-url "https://github.com/$env:Build_Repository_Name" `
+      --azure-key-vault-tenant-id "$(SignTenantId)" `
+      --azure-key-vault-client-id "$(SignClientId)" `
+      --azure-key-vault-client-secret "$(SignClientSecret)" `
+      --azure-key-vault-certificate "$(SignKeyVaultCertificate)" `
+      --azure-key-vault-url "$(SignKeyVaultUrl)" `
+      --timestamp-url http://timestamp.digicert.com
+    displayName: Sign packages
+    continueOnError: true
+    condition: >-
+      and(
+        succeeded(),
+        eq(variables['System.PullRequest.PullRequestId'], '')
+      )
+
+  # publish artifacts (only possible if this is not a PR originated on a fork)
+  - task: PublishBuildArtifacts@1
+    displayName: Publish deployables artifacts
+    condition: succeeded()
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: deployables
+      ArtifactType: Container
+
+  # push NuGet packages to NuGet feed (always happens except on PR builds)
+  - task: NuGetCommand@2
+    displayName: Push NuGet packages to NuGet
+    condition: and(succeeded(), eq(variables['System.PullRequest.PullRequestId'], ''))
+    continueOnError: true
+    inputs:
+      command: push
+      nuGetFeedType: external
+      packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg'
+      publishFeedCredentials: 'NuGet-amqplite'
+      allowPackageConflicts: true
+
+  # step from template @ nf-tools repo
+  # report error
+  - template: azure-pipelines-templates/discord-webhook-task.yml@templates
+    parameters:
+      status: 'failure'
+      webhookUrl: '$(DiscordWebhook)'
+      message: ''
