@@ -1,0 +1,24 @@
+# Copyright (c) .NET Foundation and Contributors
+# See LICENSE file in the project root for full license information.
+
+name: Update .NET nanoFramework dependencies (develop)
+
+on:
+  schedule:
+    - cron: '10 00 * * Wed,Fri'
+  workflow_dispatch:
+  repository_dispatch:
+    types: update-dependencies-develop
+
+jobs:
+  update-dependencies:
+    name: nanoFramework preview
+    uses: nanoframework/nf-tools/.github/workflows/update-dependencies.yml@main
+    secrets: inherit
+    with:
+      timeout-minutes: 180
+      solutionsToCheck: 'amqp-nanoFramework.sln'
+      workingDirectory: main
+      previewPackages: true
+      branchToPr: develop
+      repoOwner: nanoframework
