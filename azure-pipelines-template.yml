@@ -20,11 +20,6 @@ resources:
       type: github
       name: nanoframework/nf-tools
       endpoint: nfbot
-    - repository: amqpnetlite
-      type: github
-      endpoint: nanoframework
-      name: nanoframework/amqpnetlite
-      ref: ${{ parameters.sourceBranch }}
 
 jobs:
 - job: Publish
