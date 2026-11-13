@@ -1,7 +1,7 @@
 # Copyright (c) .NET Foundation and Contributors
 # See LICENSE file in the project root for full license information.
 
-name: Update .NET nanoFramework dependencies (develop)
+name: Update .NET nanoFramework dependencies (nano-develop)
 
 on:
   schedule:
@@ -20,5 +20,5 @@ jobs:
       solutionsToCheck: 'amqp-nanoFramework.sln'
       workingDirectory: main
       previewPackages: true
-      branchToPr: develop
+      branchToPr: nano-develop
       repoOwner: nanoframework
